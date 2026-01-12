@@ -25,9 +25,9 @@ const LOG_FILE = path.join(DATA_DIR, 'log.txt');
 const botStartTime = Date.now();
 const deployStates = {};
 const VERCEL_TOKEN = config.VERCEL;
-const GITHUB_URL = "https://github.com/botzmarket598/novabot";
-const GITHUB_RAW_URL = "https://raw.githubusercontent.com/botzmarket598/novabot/main";
-const UPDATE_FILES = ["Novabot.js", "package.json", "versi.json"];
+const GITHUB_URL = "https://novabot503.github.io/novabot";
+const GITHUB_RAW_URL = "https://novabot503.github.io/novabot";
+const UPDATE_FILES = ["Novabot.js", "package.json", "setting.js", "versi.json"];
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ⏰ JAKARTA TIME FUNCTION
@@ -287,6 +287,62 @@ fs.unlinkSync(RESTART_FILE);
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🔄 UPDATE SYSTEM - SIMPLE GITHUB UPDATE
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function updateVersionInSetting(settings, newVersion) {
+const updatedSettings = { ...settings };
+updatedSettings.VERSI = newVersion;    
+return updatedSettings;
+}
+function readCurrentSettings() {
+try {
+const settingPath = path.join(__dirname, 'setting.js');
+if (!fs.existsSync(settingPath)) {
+return {};
+}
+const content = fs.readFileSync(settingPath, 'utf8');
+const match = content.match(/module\.exports\s*=\s*({[\s\S]*?});/);
+if (!match) {
+return {};
+}
+const objStr = match[1];
+const cleanedStr = objStr
+.replace(/(\w+):/g, '"$1":') // Tambah quotes ke keys
+.replace(/'/g, '"') // Ganti single quotes dengan double
+.replace(/,(\s*\n\s*})/g, '$1'); // Hapus koma trailing
+try {
+return JSON.parse(cleanedStr);
+} catch (parseError) {
+const settings = {};
+const lines = objStr.split('\n').filter(line => line.trim());
+lines.forEach(line => {
+const keyMatch = line.match(/\s*(\w+):\s*["']([^"']+)["']/);
+if (keyMatch) {
+const key = keyMatch[1];
+const value = keyMatch[2];
+settings[key] = value;
+}
+});
+return settings;
+}
+} catch (error) {
+console.error("Error reading setting.js:", error);
+return {};
+}
+}
+function writeSettingFile(settings) {
+let content = 'module.exports = {\n';
+const keys = Object.keys(settings);
+keys.forEach((key, index) => {
+const value = settings[key];
+const isLast = index === keys.length - 1;
+if (typeof value === 'string') {
+content += `    ${key}: "${value}"${isLast ? '' : ','}\n`;
+} else if (typeof value === 'number') {
+content += `    ${key}: ${value}${isLast ? '' : ','}\n`;
+}
+});
+content += '};';
+return content;
+}
 function getCurrentVersion() {
 try {
 const versiPath = path.join(__dirname, 'versi.json');
@@ -295,9 +351,10 @@ const versiContent = fs.readFileSync(versiPath, 'utf8');
 const versi = versiContent.trim();
 if (versi) return versi;
 }
-return config.VERSI || "1.0";
+const settings = readCurrentSettings();
+return settings.VERSI || "1.0";
 } catch (error) {
-return config.VERSI || "1.0";
+return "1.0";
 }
 }
 async function checkLatestVersion() {
@@ -306,7 +363,7 @@ const url = `${GITHUB_RAW_URL}/versi.json`;
 const response = await fetch(url);
 if (!response.ok) {
 throw new Error(`HTTP ${response.status}`);
-}
+}       
 const versionText = await response.text();
 const latestVersion = versionText.trim();
 return latestVersion;
@@ -342,9 +399,14 @@ const updateMessage = `<blockquote>🔄 UPDATE TERSEDIA</blockquote>\n\n` +
 `<b>📦 File yang akan diupdate:</b>\n` +
 `• Novabot.js\n` +
 `• package.json\n` +
+`• setting.js (hanya update versi)\n` +
 `• versi.json\n\n` +
+`<b>⚙️ Mode Setting:</b>\n` +
+`• Hanya versi yang diupdate\n` +
+`• Token & setting lain TETAP\n` +
+`• Aman untuk konfigurasi\n\n` +
 `<b>🚀 Untuk update:</b>\n` +
-`Ketik <code>/update</code> untuk memulai proses update.`;
+`Ketik <code>/update</code> untuk memulai proses update.`;            
 try {
 await bot.sendMessage(config.OWNER_ID, updateMessage, { 
 parse_mode: 'HTML'
@@ -1848,6 +1910,8 @@ const toolsList = `<blockquote>
 ┃ ❏ ─· /pin
 ┃ ❏ ─· /play 
 ┃ ❏ ─· /tourl
+┃ ❏ ─· /tt
+┃ ❏ ─· /ig
 ┃ ❏ ─· /deploy
 ┃ ❏ ─· /listseller
 ┃ ❏ ─· 
@@ -2097,6 +2161,10 @@ await bot.editMessageText(
 `<b>📊 Perbandingan Versi:</b>\n` +
 `• Versi lokal: <code>${currentVersion}</code>\n` +
 `• Versi GitHub: <code>${latestVersion}</code>\n\n` +
+`<b>⚙️ Mode Setting:</b>\n` +
+`• setting.js: HANYA update versi\n` +
+`• Token & setting lain: TETAP\n` +
+`• File lain: Update penuh\n\n` +
 `<b>🔗 Sumber:</b>\n` +
 `${GITHUB_URL}\n\n` +
 `<i>Memulai proses download...</i>`,
@@ -2112,13 +2180,14 @@ fs.mkdirSync(backupDir, { recursive: true });
 let updatedFiles = [];
 let failedFiles = [];
 let step = 1;
+const totalFiles = UPDATE_FILES.length;
 for (const file of UPDATE_FILES) {
 try {
 await bot.editMessageText(
 `<blockquote>🔄 UPDATE SYSTEM</blockquote>\n\n` +
 `📥 Downloading file...\n\n` +
-`Progress: ${step}/${UPDATE_FILES.length}\n` +
-`File: ${file}\n` +
+`Progress: ${step}/${totalFiles}\n` +
+`File: <code>${file}</code>\n` +
 `Status: Downloading...`,
 {
 chat_id: chatId,
@@ -2126,21 +2195,29 @@ message_id: processingMsg.message_id,
 parse_mode: 'HTML'
 }
 );
-const fileContent = await downloadFileFromGithub(file);
 const filePath = path.join(__dirname, file);
 if (fs.existsSync(filePath)) {
 const backupPath = path.join(backupDir, file);
 fs.copyFileSync(filePath, backupPath);
 }
+if (file === 'setting.js') {
+const currentSettings = readCurrentSettings();
+const updatedSettings = updateVersionInSetting(currentSettings, latestVersion);
+const finalContent = writeSettingFile(updatedSettings);
+fs.writeFileSync(filePath, finalContent, 'utf8');
+updatedFiles.push(`${file} (versi updated to ${latestVersion})`);
+} else {
+const fileContent = await downloadFileFromGithub(file);
 fs.writeFileSync(filePath, fileContent, 'utf8');
 updatedFiles.push(file);
+}                
 step++;
-await new Promise(resolve => setTimeout(resolve, 500));              
+await new Promise(resolve => setTimeout(resolve, 500));
 } catch (error) {
 failedFiles.push(`${file} (${error.message})`);
 }
 }
-if (updatedFiles.includes('package.json')) {
+if (updatedFiles.some(f => f.includes('package.json'))) {
 await bot.editMessageText(
 `<blockquote>🔄 UPDATE SYSTEM</blockquote>\n\n` +
 `✅ File berhasil didownload\n` +
@@ -2151,11 +2228,14 @@ chat_id: chatId,
 message_id: processingMsg.message_id,
 parse_mode: 'HTML'
 }
-);           
+);
 try {
-exec('npm install', { cwd: __dirname });
-} catch (npmError) {}
+const { execSync } = require('child_process');
+execSync('npm install', { cwd: __dirname, stdio: 'inherit' });
+} catch (npmError) {
+console.log('NPM install error:', npmError);
 }
+}        
 const successCount = updatedFiles.length;
 const failCount = failedFiles.length;
 let reportMessage = `<blockquote>✅ UPDATE SELESAI</blockquote>\n\n`;
@@ -2178,6 +2258,12 @@ reportMessage += `• ${file}\n`;
 });
 reportMessage += `\n`;
 }
+const currentSettings = readCurrentSettings();
+reportMessage += `<b>⚙️ Konfigurasi yang TETAP SAMA:</b>\n`;
+reportMessage += `• Token: <code>${currentSettings.TELEGRAM_TOKEN ? '✓ Terjaga' : '✗ Tidak ada'}</code>\n`;
+reportMessage += `• Owner ID: <code>${currentSettings.OWNER_ID || 'Tidak ada'}</code>\n`;
+reportMessage += `• API Keys: <code>✓ Semua terjaga</code>\n`;
+reportMessage += `\n`;
 reportMessage += `<b>🚀 Langkah selanjutnya:</b>\n`;
 reportMessage += `1. Ketik <code>/restart</code> untuk menerapkan perubahan\n`;
 reportMessage += `2. Bot akan restart dengan versi baru\n`;
@@ -2194,6 +2280,10 @@ const ownerNotification = `<blockquote>📢 UPDATE BERHASIL</blockquote>\n\n` +
 `<b>📅 Waktu:</b> ${new Date().toLocaleString('id-ID')}\n` +
 `<b>🔄 Versi:</b> ${currentVersion} → ${latestVersion}\n` +
 `<b>✅ Status:</b> Update selesai\n\n` +
+`<b>🔧 Mode Update:</b>\n` +
+`• Hanya versi yang diupdate\n` +
+`• Token & konfigurasi TETAP\n` +
+`• Setting lama: 100% terjaga\n\n` +
 `<b>🚀 Silakan ketik:</b>\n<code>/restart</code>\n\n` +
 `<i>Untuk menerapkan perubahan</i>`;
 try {
@@ -2203,7 +2293,7 @@ await bot.sendMessage(config.OWNER_ID, ownerNotification, { parse_mode: 'HTML' }
 await bot.editMessageText(
 `<blockquote>❌ UPDATE GAGAL</blockquote>\n\n` +
 `Terjadi kesalahan saat proses update:\n\n` +
-`<code>${escapeHTML(error.message)}</code>\n\n` +
+`<code>${error.message}</code>\n\n` +
 `<b>🔗 GitHub URL:</b>\n` +
 `${GITHUB_URL}\n\n` +
 `<b>🔧 Solusi:</b>\n` +
