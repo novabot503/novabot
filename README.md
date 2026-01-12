@@ -1,0 +1,2 @@
+# novabot
+update sc
