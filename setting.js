@@ -2,7 +2,7 @@ module.exports = {
     TELEGRAM_TOKEN: "85515141:AAFNoP6xrgO_AogDt7VetqYMeRVpPpMj_8E",
     OWNER_ID: "75873225",
 
-    VERSI: "1.0",
+    VERSI: "1.3",
     BOT_NAME: "Novabot",
     DEVCELOPER: "botzmarket",
     DOMAIN: "https://novabot.ranggarket.my.id",
