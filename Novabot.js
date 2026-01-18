@@ -1,4 +1,4 @@
-const { createCanvas, loadImage, registerFont } = require('canvas');
+koconst { createCanvas, loadImage, registerFont } = require('canvas');
 const TelegramBot = require('node-telegram-bot-api');
 const { exec } = require('child_process');
 const fs = require('fs');
