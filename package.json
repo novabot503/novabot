@@ -15,7 +15,8 @@
     "axios": "^1.7.7",
     "archiver": "^7.0.1",
     "form-data": "^4.0.0",
-    "fs-extra": "^11.2.0"
+    "fs-extra": "^11.2.0",
+    "moment-timezone": "^0.5.45"
   },
   "devDependencies": {
     "nodemon": "^3.0.3"

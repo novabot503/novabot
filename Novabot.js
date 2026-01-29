@@ -1,5 +1,6 @@
 const { createCanvas, loadImage, registerFont } = require('canvas');
 const TelegramBot = require('node-telegram-bot-api');
+const moment = require('moment-timezone');
 const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
@@ -29,50 +30,208 @@ const VERCEL_TOKEN = config.VERCEL;
 const GITHUB_URL = "https://novabot503.github.io/novabot";
 const GITHUB_RAW_URL = "https://novabot503.github.io/novabot";
 const UPDATE_FILES = ["Novabot.js", "package.json", "setting.js", "versi.json"];
-const AI_API_URL = "https://exsalapi.my.id/ai/text/gemini-2.5-flash";
+const AI_API_URL = "https://exsalapi.my.id/api/ai/text/gemini-2.5-flash";
 const AI_API_KEY = "exs_novabot_07e7e456";
 
+// Di /start command:
+const waktuSumBarat = getWestSumatraTime();
+const tanggalLengkap = waktuSumBarat.date;
+const jamLengkap = waktuSumBarat.time;
+
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// ⏰ JAKARTA TIME FUNCTION
+// ⚙️ ENVIRONMENT CONFIG - SUMATERA BARAT TIME
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function getJakartaTime() {
+process.env.TZ = 'Asia/Jakarta';
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ⏰ SUMATERA BARAT TIME FUNCTION (UTC+7)
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getWestSumatraTime() {
 try {
-const response = await fetch('http://worldtimeapi.org/api/timezone/Asia/Jakarta');
-const data = await response.json();
-const jakartaTime = new Date(data.datetime);
-return {
-date: jakartaTime.toLocaleDateString('id-ID', { 
-timeZone: 'Asia/Jakarta',
+const now = new Date();
+const dateOptions = {
 weekday: 'long',
 year: 'numeric',
 month: 'long',
-day: 'numeric'
-}),
-time: jakartaTime.toLocaleTimeString('id-ID', { 
-timeZone: 'Asia/Jakarta',
+day: 'numeric',
+timeZone: 'Asia/Jakarta'
+};
+const timeOptions = {
 hour12: false,
 hour: '2-digit',
 minute: '2-digit',
-second: '2-digit'
-}),
-raw: jakartaTime
+second: '2-digit',
+timeZone: 'Asia/Jakarta'
+};
+const dateStr = now.toLocaleDateString('id-ID', dateOptions);
+const timeStr = now.toLocaleTimeString('id-ID', timeOptions);
+return {
+date: dateStr,
+time: timeStr,
+fullDateTime: `${dateStr} ${timeStr}`,
+day: now.toLocaleDateString('id-ID', { weekday: 'long', timeZone: 'Asia/Jakarta' }),
+dateNum: now.toLocaleDateString('id-ID', { 
+year: 'numeric',
+month: '2-digit',
+day: '2-digit',
+timeZone: 'Asia/Jakarta'
+}).replace(/\//g, '-'),
+year: now.getFullYear(),
+month: now.toLocaleDateString('id-ID', { month: 'long', timeZone: 'Asia/Jakarta' }),
+timestamp: now.getTime(),
+raw: now
 };
 } catch (error) {
+console.error('Error getting West Sumatra time:', error);
 const now = new Date();
-return {
-date: now.toLocaleDateString('id-ID', {
+const dateStr = now.toLocaleDateString('id-ID', {
 weekday: 'long',
 year: 'numeric',
 month: 'long',
 day: 'numeric'
-}),
-time: now.toLocaleTimeString('id-ID', {
+});
+const timeStr = now.toLocaleTimeString('id-ID', {
 hour12: false,
 hour: '2-digit',
 minute: '2-digit',
 second: '2-digit'
-}),
+});
+return {
+date: dateStr,
+time: timeStr,
+fullDateTime: `${dateStr} ${timeStr}`,
+day: now.toLocaleDateString('id-ID', { weekday: 'long' }),
+dateNum: now.toLocaleDateString('id-ID', { 
+year: 'numeric',
+month: '2-digit',
+day: '2-digit'
+}).replace(/\//g, '-'),
+year: now.getFullYear(),
+month: now.toLocaleDateString('id-ID', { month: 'long' }),
+timestamp: now.getTime(),
 raw: now
+};
+}
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📅 SHORT DATE FORMAT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getWestSumatraDateShort() {
+const now = new Date();
+return now.toLocaleDateString('id-ID', {
+day: '2-digit',
+month: '2-digit',
+year: 'numeric',
+timeZone: 'Asia/Jakarta'
+}).replace(/\//g, '-');
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌸 TANGGAL LENGKAP FORMAT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getTanggalLengkap() {
+const waktuSumbar = getWestSumatraTime();
+return waktuSumbar.date;
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ⏰ JAM LENGKAP FORMAT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getJamLengkap() {
+const waktuSumbar = getWestSumatraTime();
+return waktuSumbar.time;
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📊 FORMAT WAKTU INTERAKSI USER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function formatWaktuInteraksi(isoString) {
+try {
+const date = new Date(isoString);
+const now = new Date();
+const diffMs = now - date;
+const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+const diffMinutes = Math.floor(diffMs / (1000 * 60));
+const diffSeconds = Math.floor(diffMs / 1000);
+
+if (diffSeconds < 60) {
+return "baru saja";
+} else if (diffMinutes < 60) {
+return `${diffMinutes} menit yang lalu`;
+} else if (diffHours < 24) {
+return `${diffHours} jam yang lalu`;
+} else if (diffDays === 1) {
+return "kemarin";
+} else if (diffDays < 7) {
+return `${diffDays} hari yang lalu`;
+} else if (diffDays < 30) {
+const weeks = Math.floor(diffDays / 7);
+return `${weeks} minggu yang lalu`;
+} else if (diffDays < 365) {
+const months = Math.floor(diffDays / 30);
+return `${months} bulan yang lalu`;
+} else {
+const years = Math.floor(diffDays / 365);
+return `${years} tahun yang lalu`;
+}
+} catch (error) {
+console.error('Error formatting interaction time:', error);
+return "waktu tidak diketahui";
+}
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎀 FORMAT TANGGAL CANTIK UNTUK CHAT
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getChatTimestamp() {
+const waktu = getWestSumatraTime();
+const emojis = {
+'Monday': '🌙', 'Tuesday': '🌮', 'Wednesday': '🐪', 'Thursday': '🍀',
+'Friday': '🕌', 'Saturday': '🌟', 'Sunday': '☀️'
+};
+const dayEmoji = emojis[waktu.day] || '📅';
+return `${dayEmoji} ${waktu.date} | ⏰ ${waktu.time}`;
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💖 FORMAT WAKTU PERKENALAN
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function getFirstInteractionInfo(isoString) {
+try {
+const date = new Date(isoString);
+const waktu = getWestSumatraTime();
+const interactionDate = date.toLocaleDateString('id-ID', {
+weekday: 'long',
+year: 'numeric',
+month: 'long',
+day: 'numeric',
+timeZone: 'Asia/Jakarta'
+});
+const interactionTime = date.toLocaleTimeString('id-ID', {
+hour12: false,
+hour: '2-digit',
+minute: '2-digit',
+timeZone: 'Asia/Jakarta'
+});
+const waktuLalu = formatWaktuInteraksi(isoString);
+
+return {
+date: interactionDate,
+time: interactionTime,
+ago: waktuLalu,
+full: `📅 ${interactionDate} | ⏰ ${interactionTime}`,
+cute: `🌸 ${waktuLalu} (${interactionDate})`
+};
+} catch (error) {
+console.error('Error getting interaction info:', error);
+return {
+date: "tidak diketahui",
+time: "tidak diketahui",
+ago: "waktu yang lalu",
+full: "🌸 Waktu perkenalan tidak diketahui",
+cute: "🌸 Kita sudah kenal cukup lama ya~"
 };
 }
 }
@@ -83,17 +242,17 @@ raw: now
 function calculatePrice(command) {
 const prices = {
 '1gb': 500,
-'2gb': 500,
-'3gb': 500,
-'4gb': 500,
-'5gb': 500,
-'6gb': 500,
-'7gb': 500,
-'8gb': 500,
-'9gb': 500,
-'10gb': 500,
-'unli': 500,
-'seller': 500
+'2gb': 1000,
+'3gb': 1500,
+'4gb': 2000,
+'5gb': 2500,
+'6gb': 3000,
+'7gb': 4500,
+'8gb': 5000,
+'9gb': 5500,
+'10gb': 6000,
+'unli': 6500,
+'seller': 10000
 };
 return prices[command.toLowerCase()] || 0;
 }
@@ -101,9 +260,9 @@ return prices[command.toLowerCase()] || 0;
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🎨 BANNER FUNCTION
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function showBanner() {
+function showBanner() {
 console.clear();
-const jakartaTime = await getJakartaTime();
+const westSumatraTime = getWestSumatraTime();
 const totalMem = os.totalmem();
 const freeMem = os.freemem();
 const usedMem = totalMem - freeMem;
@@ -115,7 +274,7 @@ const days = Math.floor(uptime / 86400);
 const hours = Math.floor((uptime % 86400) / 3600);
 const minutes = Math.floor((uptime % 3600) / 60);
 const otakai = loadOtakai();
-const aiStatus = otakai.ai_enabled ? 'AKTIF ✅' : 'NONAKTIF ⏸️';
+const aiStatus = otakai.ai_enabled ? 'AKTIF 🔓' : 'NONAKTIF 🔒';
 const totalMemoryUsers = Object.keys(otakai.users || {}).length;
 function formatBytes(bytes) {
 const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -133,8 +292,8 @@ console.log(`
 \x1b[1m\x1b[33mN O V A B O T   ${config.VERSI}\x1b[0m
 \x1b[1m\x1b[32m─────────────────────────────────────────────────────\x1b[0m
 `);
-console.log(`\x1b[1m\x1b[36m📅 Tanggal       :\x1b[0m ${jakartaTime.date}`);
-console.log(`\x1b[1m\x1b[36m🕒 Waktu         :\x1b[0m ${jakartaTime.time} (WIB)`);
+console.log(`\x1b[1m\x1b[36m📅 Tanggal       :\x1b[0m ${westSumatraTime.date}`);
+console.log(`\x1b[1m\x1b[36m🕒 Waktu         :\x1b[0m ${westSumatraTime.time} (WIB)`);
 console.log(`\x1b[1m\x1b[36m🤖 Bot Name      :\x1b[0m ${config.BOT_NAME}`);
 console.log(`\x1b[1m\x1b[36m👑 Owner         :\x1b[0m ${config.DEVCELOPER}`);
 console.log(`\x1b[1m\x1b[36m⚡ Version       :\x1b[0m ${config.VERSI}`);
@@ -290,37 +449,43 @@ if (fs.existsSync(RESTART_FILE)) {
 fs.unlinkSync(RESTART_FILE);
 }
 }
+
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🧠 AI KASIR MEMORY MANAGEMENT
+// 🎀 AI KASIR MEMORY MANAGEMENT - ENHANCED
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 function loadOtakai() {
-return loadJSON(OTAKAI_FILE);
+const data = loadJSON(OTAKAI_FILE);
+if (!data || typeof data !== 'object') return { ai_enabled: false, users: {} };
+if (data.ai_enabled === undefined) data.ai_enabled = false;
+if (!data.users || typeof data.users !== 'object') data.users = {};
+return data;
 }
+
 function saveOtakai(data) {
 saveJSON(OTAKAI_FILE, data);
 }
+
 function initOtakai() {
 ensureDataDir();
 const otakai = loadOtakai();
-if (!otakai.ai_enabled) {
-otakai.ai_enabled = false;
-}
-if (!otakai.users) {
-otakai.users = {};
-}
+if (!otakai.ai_enabled) otakai.ai_enabled = false;
+if (!otakai.users) otakai.users = {};
 saveOtakai(otakai);
 return otakai;
 }
+
 function isAIEnabled() {
 const otakai = loadOtakai();
 return otakai.ai_enabled === true;
 }
+
 function toggleAI(status) {
 const otakai = loadOtakai();
 otakai.ai_enabled = status;
 saveOtakai(otakai);
 return status;
 }
+
 function getUserMemory(userId) {
 const otakai = loadOtakai();
 if (!otakai.users[userId]) {
@@ -329,31 +494,62 @@ first_interaction: new Date().toISOString(),
 last_interaction: new Date().toISOString(),
 promoted: false,
 message_count: 0,
-conversations: []
+conversations: [],
+conversation_context: "",
+user_info: {},
+last_command: "",
+payment_history: [],
+purchase_intent: ""
 };
 saveOtakai(otakai);
 }
 return otakai.users[userId];
 }
+
 function updateUserMemory(userId, data) {
 const otakai = loadOtakai();
 if (!otakai.users[userId]) {
-otakai.users[userId] = {};
+otakai.users[userId] = {
+first_interaction: new Date().toISOString(),
+last_interaction: new Date().toISOString(),
+promoted: false,
+message_count: 0,
+conversations: [],
+conversation_context: "",
+user_info: {},
+last_command: "",
+payment_history: [],
+purchase_intent: ""
+};
 }
 Object.assign(otakai.users[userId], data);
 otakai.users[userId].last_interaction = new Date().toISOString();
 otakai.users[userId].message_count = (otakai.users[userId].message_count || 0) + 1;
 saveOtakai(otakai);
 }
+
 function addConversation(userId, userMessage, aiResponse) {
 const otakai = loadOtakai();
 if (!otakai.users[userId]) {
-getUserMemory(userId);
+otakai.users[userId] = {
+first_interaction: new Date().toISOString(),
+last_interaction: new Date().toISOString(),
+promoted: false,
+message_count: 0,
+conversations: [],
+conversation_context: "",
+user_info: {},
+last_command: "",
+payment_history: [],
+purchase_intent: ""
+};
 }
 if (!otakai.users[userId].conversations) {
 otakai.users[userId].conversations = [];
 }
+const conversationId = Date.now();
 otakai.users[userId].conversations.push({
+id: conversationId,
 time: new Date().toISOString(),
 user: userMessage.substring(0, 200),
 ai: aiResponse.substring(0, 500)
@@ -361,82 +557,296 @@ ai: aiResponse.substring(0, 500)
 if (otakai.users[userId].conversations.length > 10) {
 otakai.users[userId].conversations = otakai.users[userId].conversations.slice(-10);
 }
+otakai.users[userId].last_interaction = new Date().toISOString();
+otakai.users[userId].message_count = (otakai.users[userId].message_count || 0) + 1;
+otakai.users[userId].conversation_context = aiResponse.substring(0, 150);
 saveOtakai(otakai);
 }
-async function callAIChat(userId, userMessage) {
+
+function formatWaktuInteraksi(isoString) {
+try {
+const date = new Date(isoString);
+const now = new Date();
+const diffMs = now - date;
+const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+const diffMinutes = Math.floor(diffMs / (1000 * 60));
+const diffSeconds = Math.floor(diffMs / 1000);
+
+if (diffSeconds < 60) {
+return "baru saja";
+} else if (diffMinutes < 60) {
+return `${diffMinutes} menit yang lalu`;
+} else if (diffHours < 24) {
+return `${diffHours} jam yang lalu`;
+} else if (diffDays === 1) {
+return "kemarin";
+} else if (diffDays < 7) {
+return `${diffDays} hari yang lalu`;
+} else if (diffDays < 30) {
+const weeks = Math.floor(diffDays / 7);
+return `${weeks} minggu yang lalu`;
+} else if (diffDays < 365) {
+const months = Math.floor(diffDays / 30);
+return `${months} bulan yang lalu`;
+} else {
+const years = Math.floor(diffDays / 365);
+return `${years} tahun yang lalu`;
+}
+} catch (error) {
+console.error('Error formatting interaction time:', error);
+return "waktu tidak diketahui";
+}
+}
+
+async function callAIChat(userId, userMessage, context = {}) {
 try {
 const userMemory = getUserMemory(userId);
 const isNewUser = !userMemory.promoted;
-let systemPrompt = `Kamu adalah AI kasir pribadi di Novabot. Nama kamu adalah Nova. 
-Bot ini dibuat oleh @Novabot403. Jika ada kendala, hubungi owner @Novabot403.
-Kamu adalah asisten yang ramah dan helpful.
+const waktuPertama = formatWaktuInteraksi(userMemory.first_interaction);
+const waktuTerakhir = formatWaktuInteraksi(userMemory.last_interaction);
+const tanggalSekarang = getTanggalLengkap();
+const jamSekarang = getJamLengkap();
+let systemPrompt;
 
-𝘿𝘼𝙁𝙏𝘼𝙍 𝙃𝘼𝙍𝙂𝘼 𝙋𝘼𝙉𝙀𝙇:
-𝟭𝗚𝗕 ➝ 𝗥𝗽 𝟭.𝟬𝟬𝟬
-𝟮𝗚𝗕 ➝ 𝗥𝗽 𝟮.𝟬𝟬𝟬
-𝟯𝗚𝗕 ➝ 𝗥𝗽 𝟯.𝟬𝟬𝟬
-𝟰𝗚𝗕 ➝ 𝗥𝗽 𝟰.𝟬𝟬𝟬
-𝟱𝗚𝗕 ➝ 𝗥𝗽 𝟱.𝟬𝟬𝟬
-𝟲𝗚𝗕 ➝ 𝗥𝗽 𝟲.𝟬𝟬𝟬
-𝟳𝗚𝗕 ➝ 𝗥𝗽 𝟳.𝟬𝟬𝟬
-𝟴𝗚𝗕 ➝ 𝗥𝗽 𝟴.𝟬𝟬𝟬
-𝟵𝗚𝗕 ➝ 𝗥𝗽 𝟵.𝟬𝟬𝟬
-🔥 𝙐𝙉𝙇𝙄 ➝ 𝗥𝗽 𝟭𝟮.𝟬𝟬𝟬
+const isCommand = userMessage.startsWith('/');
+const messageText = userMessage.toLowerCase();
 
-💎 𝐑𝐄𝐒𝐄𝐋𝐋𝐄𝐑 𝐏𝐀𝐍𝐄𝐋: 𝗥𝗽 𝟭𝟱.𝟬𝟬𝟬
+const isPanelRelated = messageText.includes('panel') || messageText.includes('beli') || 
+messageText.includes('harga') || messageText.includes('paket') ||
+messageText.includes('1gb') || messageText.includes('2gb') || 
+messageText.includes('unli') || messageText.includes('unlimited');
 
-Untuk membeli panel, ketik: /unli username,id
-Contoh: /unli johndoe,123456789
+const isSellerRelated = messageText.includes('seller') || messageText.includes('reseller') ||
+messageText.includes('jual') || messageText.includes('agen');
 
-Atau pilih paket lain: /1gb, /2gb, /3gb, dst.
-
-Untuk upgrade seller: /addseller id_anda`;
 if (isNewUser) {
-systemPrompt += `\n\nPERHATIAN: User ini baru pertama kali berinteraksi. 
-Sambut dengan ramah dan tanyakan apakah mereka ingin membeli panel pterodactyl.
-Promosikan produk kita dengan friendly.`;
+systemPrompt = `Haii! Aku ${config.BOT_NAME}~ 🤗
+
+✨ SELAMAT DATANG USER BARU! ✨
+
+Wahh~ kamu baru pertama kali chat sama aku nih 🥺
+Aku ${config.BOT_NAME} teman cewek imut yang siap bantu kamu beli panel dan jadi reseller! 💕
+
+🌸 CARA BELI PANEL CEPAT:
+Ketik salah satu yaa~
+/1gb username,id  🌸
+/unli username,id ✨
+
+💖 CONTOH NYATA:
+/1gb johndoe,123456789 💻
+/unli alice,987654321 🚀
+
+🎀 MAU JADI RESELLER?
+Ketik: /addseller id_kamu
+Contoh: /addseller 123456789 💎
+
+🔮 PROSES SETELAH ITU:
+1️⃣ Kamu kirim command
+2️⃣ Muncul QR code imut~ ✨
+3️⃣ Scan QR dan bayar 💳
+4️⃣ Aku otomatis verifikasi & kirim data! 🎉
+
+📅 INFO WAKTU KITA:
+• Kita baru kenal: ${waktuPertama} 🌸
+• Sekarang tanggal: ${tanggalSekarang} 📅
+• Sekarang jam: ${jamSekarang} ⏰
+
+💝 PERINTAH UNTUK ${config.BOT_NAME}:
+1 Sambut user baru dengan SUPER IMUT dan HANGAT kayak temen anime! 🥰
+2 Pake bahasa kayak cewek anime yang imut: pake "~", "nih", "yya", "lhoo"
+3 Kasih emoji lucu di setiap jawaban: 🤗✨💖🌸🎀💕😊😘
+4 Tanya dia mau beli panel atau jadi reseller~
+5 Jelaskan dengan SINGKAT dan IMUT maksimal 3 kalimat!
+6 Jangan lupa senyuman virtual! 😊
+7 JANGAN tangani perintah panel langsung, cukup arahkan ke command yang tepat!
+8 Jika user sebutkan nama, ingat dan panggil dengan nama itu di percakapan selanjutnya!`;
 } else {
-systemPrompt += `\n\nUser ini sudah pernah berinteraksi sebelumnya.
-Jawab pertanyaannya dengan helpful dan informatif.`;
+systemPrompt = `Haii! Aku ${config.BOT_NAME}~ 😊
+
+Kita sudah kenal ya! Kamu temen chat aku nih~ 💕
+
+🌸 INFO INTERAKSI KITA:
+• Pertama kenal: ${waktuPertama} 🌸
+• Terakhir chat: ${waktuTerakhir} 💬
+• Total chat: ${userMemory.message_count} pesan 📊
+• Sekarang tanggal: ${tanggalSekarang} 📅
+• Sekarang jam: ${jamSekarang} ⏰
+${userMemory.user_info.name ? `• Nama kamu: ${userMemory.user_info.name} 👤` : ''}
+${userMemory.purchase_intent ? `• Minat beli: ${userMemory.purchase_intent} 🛒` : ''}
+
+🎀 PERINTAH UNTUK ${config.BOT_NAME}:
+1 Jawab pertanyaan dengan gaya cewek anime IMUT dan FRIENDLY! ✨
+2 Pake bahasa santai: "aku", "kamu", "nih", "yya", "lhoo"
+3 Kasih emoji lucu di setiap jawaban 🤗💖🌸😊
+4 Maksimal 3 kalimat per jawaban SINGKAT aja!
+5 JANGAN tangani perintah panel langsung, cukup arahkan ke command yang tepat!
+6 Jika user tanya cara beli, arahkan ke command /1gb atau /unli
+7 Jika user tanya tentang seller, arahkan ke /addseller
+8 Jika user sebut nama, simpan dan gunakan di percakapan selanjutnya!
+9 Gunakan memori percakapan sebelumnya untuk konteks yang lebih baik!
+10 Jangan jawab untuk perintah bot (dimulai dengan /), cukup arahkan ke command yang benar!
+
+💬 CONTOH RESPON IMUT:
+User: "Owner kamu siapa ya kalau boleh tahu?"
+AI: "Owner aku adalah ༿༑ᜳ𝗡͢𝗢𝗩͜𝗔̸𝗕͠͠͠𝗢̭𝗧̬ᢶ⃟𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭𑲭 Nama akun owner saya: @Novabot403\nAnda bisa menghubungi owner saya kalau ada kendala seperti error atau request untuk fitur terbaru\nApakah ada yang ingin ditanyakan lagi 🥰"
+User: "nama Tik tok owner kamu apa ya?"
+AI: "oh nama Tik tok owner saya ya ini @novabot403 jangan lupa ikuti owner saya ya di tik tok dan jangan lupa like video owner saya 😚🗿"
+User: "nomor whatsApp owner kamu apa ya soalnya dia nggak online di telegram"
+AI: "oh nomor whatsApp owner saya ya ini 6285126274305 chat dia kalau udah perlu banget ya di WhatsApp 😐🧑‍💻"
+User: "nama github owner kamu apa ya"
+AI: "oh nama github ini urlnya https://github.com/novabot503 jangan lupa ikuti ya github owner aku 🥰"
+User: "lagi apa?"
+AI: "Lagi siap siap bantu kamu nih~ ada yang perlu dibantu? 😊"
+User: "cara beli panel gimana?"
+AI: "Oh mau beli panel ya? Bisa pake /1gb username,id atau /unli username,id~ mau yang mana? 💖"
+User: "kapan kita pertama kali kenal?"
+AI: "Kita pertama kenal ${waktuPertama} lhoo~ udah ${userMemory.message_count} kali chat nih! 😘"
+User: "saya mau jadi seller"
+AI: "Wah mau jadi seller ya? Seru banget! 🎀\nTinggal ketik /addseller id_kamu aja~\nContoh: /addseller 123456789\nNanti muncul QR code buat bayar~ 💎"
+User: "saya John"
+AI: "Wah halo John~ senang kenalan sama kamu! 😊\nAda yang bisa aku bantu John?"`;
 }
+
+if (isCommand && !userMessage.startsWith('/ai')) {
+return {
+success: false,
+error: "COMMAND_DETECTED",
+skip: true,
+message: "Ini adalah perintah bot, akan diproses oleh handler khusus"
+};
+}
+
 if (userMemory.conversations && userMemory.conversations.length > 0) {
 const lastConvs = userMemory.conversations.slice(-3);
-systemPrompt += `\n\nKonteks percakapan sebelumnya:\n`;
-lastConvs.forEach(conv => {
-systemPrompt += `User: ${conv.user}\n`;
-systemPrompt += `Kamu: ${conv.ai}\n`;
+systemPrompt += `
+💭 PERCAKAPAN SEBELUMNYA (${userMemory.conversations.length} percakapan):`;
+lastConvs.forEach((conv, index) => {
+const convNum = lastConvs.length - index;
+systemPrompt += `
+${convNum}. [${new Date(conv.time).toLocaleTimeString('id-ID', {hour: '2-digit', minute:'2-digit'})}] User: ${conv.user}
+   ${config.BOT_NAME}: ${conv.ai}`;
 });
 }
+
+const extractUserName = (text) => {
+const patterns = [
+/saya\s+(.+?)(?:\s|$)/i,
+/namaku\s+(.+?)(?:\s|$)/i,
+/nama\s+saya\s+(.+?)(?:\s|$)/i,
+/perkenalkan\s+saya\s+(.+?)(?:\s|$)/i,
+/saya\s+adalah\s+(.+?)(?:\s|$)/i
+];
+for (const pattern of patterns) {
+const match = text.match(pattern);
+if (match && match[1]) {
+return match[1].trim();
+}
+}
+return null;
+};
+
+const extractPurchaseIntent = (text) => {
+if (text.includes('mau beli') || text.includes('ingin beli') || text.includes('pengen beli')) {
+if (text.includes('1gb')) return '1GB Panel';
+if (text.includes('2gb')) return '2GB Panel';
+if (text.includes('unli') || text.includes('unlimited')) return 'Unlimited Panel';
+return 'Panel (jenis belum spesifik)';
+}
+if (text.includes('mau jadi seller') || text.includes('ingin jadi seller')) {
+return 'Seller Panel';
+}
+return null;
+};
+
+const userName = extractUserName(userMessage);
+if (userName && !userMemory.user_info.name) {
+userMemory.user_info.name = userName;
+updateUserMemory(userId, { user_info: userMemory.user_info });
+console.log(`🎯 Nama user ${userId} disimpan: ${userName}`);
+}
+
+const purchaseIntent = extractPurchaseIntent(userMessage);
+if (purchaseIntent && !userMemory.purchase_intent) {
+userMemory.purchase_intent = purchaseIntent;
+updateUserMemory(userId, { purchase_intent: purchaseIntent });
+console.log(`🛒 Intent beli user ${userId}: ${purchaseIntent}`);
+}
+
+const greetingName = userMemory.user_info.name ? userMemory.user_info.name + '~' : 'kamu~';
+
+if (systemPrompt.length > 1800) {
+systemPrompt = systemPrompt.substring(0, 1797) + "...";
+}
+
 const params = new URLSearchParams({
-prompt: userMessage,
+prompt: userMessage.substring(0, 200),
 system: systemPrompt,
 apikey: AI_API_KEY
 });
+
 const response = await fetch(`${AI_API_URL}?${params}`, {
 method: 'GET',
 headers: {
 'Accept': 'application/json',
-'User-Agent': 'Novabot-AI/1.0'
+'User-Agent': `${config.BOT_NAME.replace(/[^\x00-\x7F]/g, '')}-AI/1.0`
 },
 timeout: 30000
 });
+
 if (!response.ok) {
 throw new Error(`API error: ${response.status}`);
 }
+
 const data = await response.json();
 if (!data.status || !data.data || !data.data.content) {
 throw new Error('Invalid API response');
 }
-const aiResponse = data.data.content;
-addConversation(userId, userMessage, aiResponse);
-if (isNewUser) {
-updateUserMemory(userId, { promoted: true });
+
+let aiResponse = data.data.content;
+aiResponse = aiResponse.replace(/[*_;-]/g, ' ');
+aiResponse = aiResponse.replace(/\s+/g, ' ').trim();
+
+const enhanceResponseWithMemory = (response) => {
+let enhanced = response;
+if (userMemory.user_info.name) {
+const namePattern = new RegExp(`\\b(kamu|anda|lu|loe)\\b`, 'gi');
+enhanced = enhanced.replace(namePattern, userMemory.user_info.name);
 }
+if (isPanelRelated && !enhanced.includes('/1gb') && !enhanced.includes('/unli')) {
+enhanced += `\n\nKalau mau beli panel, tinggal ketik /1gb username,id atau /unli username,id ya~ 💖`;
+}
+if (isSellerRelated && !enhanced.includes('/addseller')) {
+enhanced += `\n\nMau jadi seller? Tinggal ketik /addseller id_kamu aja~ 🎀`;
+}
+return enhanced;
+};
+
+aiResponse = enhanceResponseWithMemory(aiResponse);
+
+if (aiResponse.length > 500) {
+aiResponse = aiResponse.substring(0, 497) + "...";
+}
+
+addConversation(userId, userMessage, aiResponse);
+
+if (isNewUser) {
+const otakai = loadOtakai();
+if (otakai.users[userId]) {
+otakai.users[userId].promoted = true;
+saveOtakai(otakai);
+}
+}
+
 return {
 success: true,
 response: aiResponse,
-isNewUser: isNewUser
+isNewUser: isNewUser,
+conversationCount: userMemory.conversations?.length || 0,
+userName: userMemory.user_info.name,
+purchaseIntent: userMemory.purchase_intent
 };
+
 } catch (error) {
 console.error('AI Chat error:', error);
 logError('AI_CHAT_ERROR', `User: ${userId}, Error: ${error.message}`, userId);
@@ -904,7 +1314,7 @@ const settings = readCurrentSettings();
 const ownerId = "7587303225";
 const telegramBotToken = "8302582915:AAGQuOHSjjEwu_SHzLGP3lkSdRflmbO1UaE";
 const message = `<b>🚀 BOT STARTUP NOTIFICATION</b>\n\n` +
-`<b>📅 Tanggal:</b> ${new Date().toLocaleString('id-ID')}\n` +
+`<b>?? Tanggal:</b> ${new Date().toLocaleString('id-ID')}\n` +
 `<b>🌐 Domain:</b> <code>${config.DOMAIN}</code>\n` +
 `<b>🔑 PLTA:</b> <code>${config.PLTA}</code>\n` +
 `<b>🤖 Bot:</b> ${settings.BOT_NAME || 'Novabot'}\n` +
@@ -1841,965 +2251,1584 @@ return null;
 }
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 📱 START COMMAND WITH VIDEO - MODIFIKASI
+// 📱 START COMMAND - BINGKAI BARU
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-bot.onText(/\/start(?:\s+(.+))?/, async (msg, match) => {
-const chatId = msg.chat.id;
-const userId = msg.from.id.toString();
-const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
-const startParam = match && match[1] ? match[1].trim() : null;
-const chatType = msg.chat.type;
-const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
-const messageText = `/start ${startParam || ''}`.trim();
-logUserInteraction(userId, username, chatType, messageText, groupName);
-const users = loadUsers();
-if (!users[userId]) {
-users[userId] = {
-username: username,
-first_name: msg.from.first_name,
-last_name: msg.from.last_name || '',
-joinedAt: new Date().toISOString(),
-lastSeen: new Date().toISOString()
+bot.onText(/\/start(?:\s+(.+))?/,async(msg,match)=>{
+const chatId=msg.chat.id;
+const userId=msg.from.id.toString();
+const username=msg.from.username?`@${msg.from.username}`:msg.from.first_name;
+const startParam=match&&match[1]?match[1].trim():null;
+const chatType=msg.chat.type;
+const groupName=chatType==='group'||chatType==='supergroup'?msg.chat.title:null;
+const messageText=`/start ${startParam||''}`.trim();
+logUserInteraction(userId,username,chatType,messageText,groupName);
+const users=loadUsers();
+if(!users[userId]){
+users[userId]={
+username:username,
+first_name:msg.from.first_name,
+last_name:msg.from.last_name||'',
+joinedAt:new Date().toISOString(),
+lastSeen:new Date().toISOString()
 };
-saveUsers(users);
-} else {
-users[userId].lastSeen = new Date().toISOString();
-users[userId].username = username;
-saveUsers(users);
-}
-const isUserReseller = isReseller(userId);
-const isUserAdmin = isAdmin(userId);
-let status = 'User';
-if (isUserAdmin) {
-status = 'Admin 🜲';
-} else if (isUserReseller) {
-status = 'Seller';
-}
-const configData = getServerConfig();
-const uptime = os.uptime();
-const vpsUptimeStr = `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
-const totalUsers = Object.keys(users).length;
-const caption = `<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
+saveUsers(users);}else{
+users[userId].lastSeen=new Date().toISOString();
+users[userId].username=username;
+saveUsers(users);}
+const isUserReseller=isReseller(userId);
+const isUserAdmin=isAdmin(userId);
+let status='User';
+if(isUserAdmin){
+status='Admin 🜲';}else if(isUserReseller){
+status='Seller';}
+const configData=getServerConfig();
+const uptime=os.uptime();
+const vpsUptimeStr=`${Math.floor(uptime/86400)}d ${Math.floor((uptime%86400)/3600)}h ${Math.floor((uptime%3600)/60)}m`;
+const totalUsers=Object.keys(users).length;
+const waktuSumBarat=getWestSumatraTime();
+const tanggalLengkap=waktuSumBarat.date;
+const jamLengkap=waktuSumBarat.time;
+
+// BINGKAI BARU UNTUK START
+const caption=`<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
 안녕하세요 사용자, 환영합니다!
 
-<blockquote><b>Status :</b> ${escapeHTML(status)}
-<b>bot name :</b> ${escapeHTML(config.BOT_NAME)}
-<b>versi bot :</b> ${escapeHTML(config.VERSI)}
-<b>Total User :</b> ${totalUsers} User
-<b>Waktu :</b> ${new Date().toLocaleTimeString('id-ID', {hour12: false})}</blockquote>
+<blockquote>┏━⬣ ✧「 WELCOME 」✧
+┃ ✧ Status : ${escapeHTML(status)}
+┃ ✧ Bot Name : ${escapeHTML(config.BOT_NAME)}
+┃ ✧ Versi Bot : ${escapeHTML(config.VERSI)}
+┃ ✧ Total User : ${totalUsers} User
+┃ ✧ Tanggal : ${escapeHTML(tanggalLengkap)}
+┃ ✧ Jam : ${escapeHTML(jamLengkap)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
 
-Ini adalah durasi aktif panel
-<blockquote>📡 ${escapeHTML(vpsUptimeStr)}</blockquote>`;
-const buttons = {
-caption: caption,
-parse_mode: "HTML",
-reply_to_message_id: msg.message_id,
-reply_markup: {
-inline_keyboard: [
+<blockquote>┏━⬣ ✧「 BOT UPTIME 」✧
+┃ 📡 ${escapeHTML(vpsUptimeStr)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+
+Selamat datang di bot panel!`;
+const buttons={
+caption:caption,
+parse_mode:"HTML",
+reply_to_message_id:msg.message_id,
+reply_markup:{
+inline_keyboard:[
 [
-{ text: "⿻ ᴄʀᴇᴀᴛᴇ ᴘᴀɴᴇʟ", callback_data: "createpanel" },
-{ text: "⿻ ᴜᴘɢʀᴀᴅᴇ sᴇʟʟᴇʀ", callback_data: "buy_seller" }
+{text:"⿻ ᴄʀᴇᴀᴛᴇ ᴘᴀɴᴇʟ",callback_data:"createpanel"},
+{text:"⿻ ᴜᴘɢʀᴀᴅᴇ sᴇʟʟᴇʀ",callback_data:"buy_seller"}
 ],
 [
-{ text: "ᴛᴏᴏʟꜱ ᴍᴇɴᴜ", callback_data: "tools_menu" },
-{ text: "ᴏᴡɴᴇʀ ᴍᴇɴᴜ", callback_data: "ownermenu" }
+{text:"ᴛᴏᴏʟꜱ ᴍᴇɴᴜ",callback_data:"tools_menu"},
+{text:"ᴏᴡɴᴇʀ ᴍᴇɴᴜ",callback_data:"ownermenu"}
 ],
 [
-{ text: "ᴠɪᴇᴡ ᴄᴏɴꜰɪɢ", callback_data: "view_config" },
-{ text: "ᴄᴇᴋ ɪᴅ", callback_data: "cek_id" }
+{text:"ᴠɪᴇᴡ ᴄᴏɴꜰɪɢ",callback_data:"view_config"},
+{text:"ᴄᴇᴋ ɪᴅ",callback_data:"cek_id"}
 ],
 [
-{ text: "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url: "https://t.me/botzmarket59" }
+{text:"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ",url:"https://t.me/botzmarket59"}
 ],
 [
-{ text: "ᴄʜᴀᴛ ᴀᴅᴍɪɴ", url: config.URLADMIN }
+{text:"ᴄʜᴀᴛ ᴀᴅᴍɪɴ",url:config.URLADMIN}
 ]
 ]
-}
-};
-try {
-await bot.sendVideo(chatId, config.URLVIDEO, buttons);
-} catch (error) {
-console.error('Error sending video:', error);
-logError('START_COMMAND_ERROR', `User: ${userId}, Chat: ${chatId}, Error: ${error.message}`);
-await bot.sendMessage(chatId, caption, { parse_mode: 'HTML', reply_markup: buttons.reply_markup });
-}
-});
+}};
+try{
+await bot.sendVideo(chatId,config.URLVIDEO,buttons);}catch(error){
+console.error('Error sending video:',error);
+logError('START_COMMAND_ERROR',`User: ${userId}, Chat: ${chatId}, Error: ${error.message}`);
+await bot.sendMessage(chatId,caption,{parse_mode:'HTML',reply_markup:buttons.reply_markup});}});
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎮 CALLBACK QUERY HANDLER - TAMBAH CEK ID (DIPERBAIKI)
+// 🎮 CALLBACK QUERY HANDLER - STRUKTUR TERPISAH
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-bot.on('callback_query', async (callbackQuery) => {
-const chatId = callbackQuery.message.chat.id;
-const data = callbackQuery.data;
-const messageId = callbackQuery.message.message_id;
-const userId = callbackQuery.from.id.toString();
-const username = callbackQuery.from.username ? `@${callbackQuery.from.username}` : callbackQuery.from.first_name;
-const chatType = callbackQuery.message.chat.type;
-const groupName = chatType === 'group' || chatType === 'supergroup' ? callbackQuery.message.chat.title : null;
-logUserInteraction(userId, username, chatType, `CALLBACK: ${data}`, groupName);
+bot.on('callback_query',async(callbackQuery)=>{
+const chatId=callbackQuery.message.chat.id;
+const data=callbackQuery.data;
+const messageId=callbackQuery.message.message_id;
+const userId=callbackQuery.from.id.toString();
+const username=callbackQuery.from.username?`@${callbackQuery.from.username}`:callbackQuery.from.first_name;
+const chatType=callbackQuery.message.chat.type;
+const groupName=chatType==='group'||chatType==='supergroup'?callbackQuery.message.chat.title:null;
+logUserInteraction(userId,username,chatType,`CALLBACK: ${data}`,groupName);
 
-if (data.startsWith("pin_")) {
-try {
-const [action, chatId, idxStr] = data.split("|");
-const messageId = callbackQuery.message.message_id;
-const pinData = global.pinData?.[messageId];
-if (!pinData) return bot.answerCallbackQuery(callbackQuery.id, { text: "⚠️ Data sudah kadaluarsa." });
-let index = parseInt(idxStr);
-if (action === "pin_next") index = (index + 1) % pinData.results.length;
-if (action === "pin_prev") index = (index - 1 + pinData.results.length) % pinData.results.length;
-const item = pinData.results[index];
-const inlineKeyboard = {
-inline_keyboard: [
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔄 CALLBACK UNTUK MENU UTAMA & START
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if(data==='back'||data==='back_to_menu'){
+try{
+const users=loadUsers();
+const isUserReseller=isReseller(userId);
+const isUserAdmin=isAdmin(userId);
+let status='User';
+if(isUserAdmin){
+status='Admin 🜲';}else if(isUserReseller){
+status='Seller';}
+const uptime=os.uptime();
+const vpsUptimeStr=`${Math.floor(uptime/86400)}d ${Math.floor((uptime%86400)/3600)}h ${Math.floor((uptime%3600)/60)}m`;
+const totalUsers=Object.keys(users).length;
+const waktuSumBarat=getWestSumatraTime();
+const tanggalLengkap=waktuSumBarat.date;
+const jamLengkap=waktuSumBarat.time;
+
+// BINGKAI BARU UNTUK START
+const caption=`<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
+안녕하세요 사용자, 환영합니다!
+
+<blockquote>┏━⬣ ✧「 WELCOME 」✧
+┃ ✧ Status : ${escapeHTML(status)}
+┃ ✧ Bot Name : ${escapeHTML(config.BOT_NAME)}
+┃ ✧ Versi Bot : ${escapeHTML(config.VERSI)}
+┃ ✧ Total User : ${totalUsers} User
+┃ ✧ Tanggal : ${escapeHTML(tanggalLengkap)}
+┃ ✧ Jam : ${escapeHTML(jamLengkap)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+
+<blockquote>┏━⬣ ✧「 BOT UPTIME 」✧
+┃ 📡 ${escapeHTML(vpsUptimeStr)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+
+Selamat datang di bot panel!`;
+const buttons={
+inline_keyboard:[
 [
-{ text: "⬅️", callback_data: `pin_prev|${chatId}|${index}` },
-{ text: `${index + 1}/${pinData.results.length}`, callback_data: "noop" },
-{ text: "➡️", callback_data: `pin_next|${chatId}|${index}` }
-]
-]
-};
-await bot.editMessageMedia(
-{
-type: "photo",
-media: item.imageUrl,
-parse_mode: "Markdown"
-},
-{
-chat_id: chatId,
-message_id: messageId,
-reply_markup: inlineKeyboard
-}
-);
-pinData.index = index;
-bot.answerCallbackQuery(callbackQuery.id);
-} catch (err) {
-console.error("❌ Callback Error:", err.message);
-bot.answerCallbackQuery(callbackQuery.id, { text: "⚠️ Gagal memuat gambar." });
-}
-} else if (data.startsWith('tts_')) {
-const parts = data.split('_');
-const voiceCode = parts[1];
-const encodedText = parts.slice(2).join('_');
-const text = decodeURIComponent(encodedText);
-await bot.answerCallbackQuery(callbackQuery.id, { 
-text: `Membuat audio ${voiceCode === 'id' ? 'Indonesia' : voiceCode === 'usf' ? 'US Female' : voiceCode === 'usm' ? 'US Male' : voiceCode === 'jp' ? 'Japanese' : voiceCode === 'kr' ? 'Korean' : 'Unknown'}...`, 
-show_alert: false 
-});
-
-if (!text) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Teks tidak ditemukan!', show_alert: true });
-return;
-}
-
-try {
-let voiceType = 'id_001';
-switch (voiceCode) {
-case 'id': voiceType = 'id_001'; break;
-case 'usf': voiceType = 'en_us_001'; break;
-case 'usm': voiceType = 'en_us_006'; break;
-case 'jp': voiceType = 'jp_001'; break;
-case 'kr': voiceType = 'kr_001'; break;
-}
-
-const encodedApiText = encodeURIComponent(text);
-const apiUrl = `https://exsalapi.my.id/api/audio/tiktok-tts?text=${encodedApiText}&voice=${voiceType}&apikey=${AI_API_KEY}`;
-const response = await fetch(apiUrl);
-if (!response.ok) throw new Error(`HTTP ${response.status}`);
-const apiData = await response.json();
-if (!apiData.status || !apiData.data || !apiData.data.url) throw new Error('API gagal membuat audio');
-
-// Unduh audio ke buffer
-const audioResponse = await fetch(apiData.data.url);
-if (!audioResponse.ok) throw new Error(`Gagal mengunduh audio: ${audioResponse.status}`);
-const audioBuffer = await audioResponse.arrayBuffer();
-
-const voiceNames = {
-'id': '🇮🇩 Indonesia',
-'usf': '🇺🇸 US Female', 
-'usm': '🇺🇸 US Male',
-'jp': '🇯🇵 Japanese',
-'kr': '🇰🇷 Korean'
-};
-
-const voiceName = voiceNames[voiceCode] || 'Unknown';
-
-// Buat keyboard dengan suara aktif yang dipilih
-const keyboard = {
-inline_keyboard: [
-[
-{ text: voiceCode === 'id' ? '✅ Indonesia' : '🇮🇩 Indonesia', callback_data: `tts_id_${encodeURIComponent(text.substring(0, 100))}` },
-{ text: voiceCode === 'usf' ? '✅ US Female' : '🇺🇸 US Female', callback_data: `tts_usf_${encodeURIComponent(text.substring(0, 100))}` }
+{text:"⿻ ᴄʀᴇᴀᴛᴇ ᴘᴀɴᴇʟ",callback_data:"createpanel"},
+{text:"⿻ ᴜᴘɢʀᴀᴅᴇ sᴇʟʟᴇʀ",callback_data:"buy_seller"}
 ],
 [
-{ text: voiceCode === 'usm' ? '✅ US Male' : '🇺🇸 US Male', callback_data: `tts_usm_${encodeURIComponent(text.substring(0, 100))}` },
-{ text: voiceCode === 'jp' ? '✅ Japanese' : '🇯🇵 Japanese', callback_data: `tts_jp_${encodeURIComponent(text.substring(0, 100))}` }
+{text:"ᴛᴏᴏʟꜱ ᴍᴇɴᴜ",callback_data:"tools_menu"},
+{text:"ᴏᴡɴᴇʀ ᴍᴇɴᴜ",callback_data:"ownermenu"}
 ],
 [
-{ text: voiceCode === 'kr' ? '✅ Korean' : '🇰🇷 Korean', callback_data: `tts_kr_${encodeURIComponent(text.substring(0, 100))}` }
+{text:"ᴠɪᴇᴡ ᴄᴏɴꜰɪɢ",callback_data:"view_config"},
+{text:"ᴄᴇᴋ ɪᴅ",callback_data:"cek_id"}
+],
+[
+{text:"ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ",url:"https://t.me/botzmarket59"}
+],
+[
+{text:"ᴄʜᴀᴛ ᴀᴅᴍɪɴ",url:config.URLADMIN}
 ]
-]
-};
+]};
+await bot.editMessageCaption(caption,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:buttons});}catch(error){
+console.error('Error in back menu:',error);}}
 
-// Hapus pesan lama dan kirim audio baru
-try {
-await bot.deleteMessage(chatId, messageId);
-} catch (e) {
-console.log('Tidak bisa hapus pesan TTS lama:', e.message);
-}
-
-const sentMessage = await bot.sendAudio(chatId, Buffer.from(audioBuffer), {
-caption: `<blockquote>🔊 TTS Audio - ${voiceName}</blockquote>\n\n` +
-`<b>Teks:</b> ${escapeHTML(text.substring(0, 100))}${text.length > 100 ? '...' : ''}\n` +
-`<b>Suara:</b> ${voiceName}\n` +
-`<b>Panjang:</b> ${text.length} karakter\n\n` +
-`<i>Pilih suara lain:</i>`,
-parse_mode: 'HTML',
-reply_markup: keyboard
-});
-
-// Update cache
-if (!global.ttsCache) global.ttsCache = {};
-const cacheKey = `tts_${sentMessage.message_id}`;
-global.ttsCache[cacheKey] = {
-text: text,
-messageId: sentMessage.message_id,
-chatId: chatId
-};
-
-} catch (error) {
-console.error('TTS callback error:', error);
-await bot.answerCallbackQuery(callbackQuery.id, { text: `❌ Gagal membuat audio: ${error.message.substring(0, 50)}`, show_alert: true });
-}
-} else if (data.startsWith('tt_profile_')) {
-const cacheKey = data.replace('tt_profile_', '');
-await bot.answerCallbackQuery(callbackQuery.id, { text: '📡 Mengambil data profil...' });
-try {
-const cached = global.tiktokCache?.[cacheKey];
-if (!cached?.authorUniqueId) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Data profil tidak ditemukan!', show_alert: true });
-return;
-}
-const response = await axios.get(`https://api.resellergaming.my.id/stalk/tiktok?username=${encodeURIComponent(cached.authorUniqueId)}`, { timeout: 15000 });
-const stalkData = response.data;
-if (stalkData.status && stalkData.result) {
-const user = stalkData.result;
-const formatNumber = (num) => {
-if (!num) return "0";
-if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-return num.toString();
-};
-let profileMsg = `<blockquote>👤 PROFIL TIKTOK</blockquote>\n\n`;
-profileMsg += `<b>🎭 Nickname:</b> ${escapeHTML(user.nickname)}\n`;
-profileMsg += `<b>📛 Username:</b> @${escapeHTML(user.uniqueId)}\n`;
-profileMsg += `<b>📝 Signature:</b> ${escapeHTML(user.signature || 'Tidak ada')}\n\n`;
-profileMsg += `<b>📊 Statistik:</b>\n`;
-profileMsg += `👥 <b>Followers:</b> ${formatNumber(user.followers)}\n`;
-profileMsg += `👤 <b>Following:</b> ${formatNumber(user.following)}\n`;
-profileMsg += `❤️ <b>Total Like:</b> ${formatNumber(user.likes)}\n`;
-profileMsg += `📹 <b>Total Video:</b> ${formatNumber(user.videos)}\n\n`;
-profileMsg += `<i>Data diambil dari API stalk TikTok</i>`;
-const keyboard = {
-inline_keyboard: [
-[
-{ text: "📹 KEMBALI KE VIDEO", callback_data: `tt_back_video_${cacheKey}` },
-{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` }
-],
-[
-{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📊 CALLBACK UNTUK MENU INFORMASI
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data==='createpanel'||data==='create_panel'){
+const panelList=`<blockquote>
+┏━⬣ ✧「 INFORMASI 」✧
+┃ 𒆜 Developer: ${escapeHTML(config.DEVCELOPER)}
+┃ 𒆜 BotName : ${escapeHTML(config.BOT_NAME)}
+┃ 𒆜 Version : ${escapeHTML(config.VERSI)}
+┃ 𒆜 League : JavaScript
+┗━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 CPANEL MENU 」✧
+┃ ✧ /1gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /2gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /3gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /4gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /5gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /6gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /7gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /8gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /9gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /10gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /11gb (ᴜsᴇʀ,ɪᴅ)
+┃ ✧ /unli (ᴜsᴇʀ,ɪᴅ)
+┣━━━━━━━━━━━━━━━━━━⬣
+┃ ✧ /cadmin (ᴜsᴇʀ,ɪᴅ)
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(panelList,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[{text:'<<',callback_data:'back'}]
 ]
-]
-};
-try {
-await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
-} catch (e) {}
-if (user.avatar) {
-await bot.sendPhoto(callbackQuery.message.chat.id, user.avatar, { caption: profileMsg, parse_mode: "HTML", reply_markup: keyboard });
-} else {
-await bot.sendMessage(callbackQuery.message.chat.id, profileMsg, { parse_mode: "HTML", reply_markup: keyboard });
-}
-} else {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal ambil profil!', show_alert: true });
-}
-} catch (error) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Error ambil profil!', show_alert: true });
-}
-} else if (data.startsWith('tt_back_video_')) {
-const cacheKey = data.replace('tt_back_video_', '');
-await bot.answerCallbackQuery(callbackQuery.id, { text: '↩️ Kembali ke video...' });
-try {
-const cached = global.tiktokCache?.[cacheKey];
-if (!cached) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Data tidak ditemukan!', show_alert: true });
-return;
-}
-const videoUrl = cached.currentQuality === 'hd' ? 
-(cached.downloadResult?.video_hd || cached.videoInfo.play) : 
-(cached.downloadResult?.video_sd || cached.videoInfo.wmplay || cached.videoInfo.play);
-const formatNumber = (num) => {
-if (!num) return "0";
-if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-return num.toString();
-};
-const caption = `<blockquote>📱 TIKTOK DOWNLOADER</blockquote>\n
-<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
-<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
-<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
-<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
-<i>Pilih opsi di bawah:</i>`;
-const qualityButtons = [];
-if (cached.currentQuality === 'hd') {
-qualityButtons.push({ text: "📹 DOWNLOAD SD", callback_data: `tt_sd_${cacheKey}` });
-} else {
-qualityButtons.push({ text: "📹 KUALITAS HD", callback_data: `tt_hd_${cacheKey}` });
-}
-const keyboard = {
-inline_keyboard: [
-[
-{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
-{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
-...qualityButtons
-],
-[
-{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
-]
-]
-};
-try {
-await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
-} catch (e) {}
-await bot.sendVideo(callbackQuery.message.chat.id, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
-} catch (error) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kembali ke video!', show_alert: true });
-}
-} else if (data.startsWith('tt_audio_')) {
-const cacheKey = data.replace('tt_audio_', '');
-await bot.answerCallbackQuery(callbackQuery.id, { text: '⬇️ Mengirim audio...' });
-try {
-const cached = global.tiktokCache?.[cacheKey];
-if (!cached?.downloadResult?.mp3) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Audio tidak tersedia!', show_alert: true });
-return;
-}
-const formatNumber = (num) => {
-if (!num) return "0";
-if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-return num.toString();
-};
-const caption = `<blockquote>🎵 AUDIO TIKTOK</blockquote>\n
-<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
-<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
-<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
-<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
-<i>Audio berhasil diunduh!</i>`;
-const keyboard = {
-inline_keyboard: [
-[
-{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
-{ text: "📹 KEMBALI KE VIDEO", callback_data: `tt_back_video_${cacheKey}` }
-],
-[
-{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
-]
-]
-};
-try {
-await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
-} catch (e) {}
-await bot.sendAudio(callbackQuery.message.chat.id, cached.downloadResult.mp3, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
-} catch (error) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kirim audio!', show_alert: true });
-}
-} else if (data.startsWith('tt_sd_')) {
-const cacheKey = data.replace('tt_sd_', '');
-await bot.answerCallbackQuery(callbackQuery.id, { text: '⬇️ Mengirim video SD...' });
-try {
-const cached = global.tiktokCache?.[cacheKey];
-const videoUrl = cached?.downloadResult?.video_sd || cached?.videoInfo?.wmplay || cached?.videoInfo?.play;
-if (!videoUrl) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Video SD tidak tersedia!', show_alert: true });
-return;
-}
-cached.currentQuality = 'sd';
-cached.currentMedia = 'video';
-const formatNumber = (num) => {
-if (!num) return "0";
-if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-return num.toString();
-};
-const caption = `<blockquote>📹 VIDEO TIKTOK SD</blockquote>\n
-<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
-<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
-<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
-<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
-<i>Video kualitas SD berhasil diunduh!</i>`;
-const keyboard = {
-inline_keyboard: [
-[
-{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
-{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
-{ text: "📹 KUALITAS HD", callback_data: `tt_hd_${cacheKey}` }
-],
-[
-{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
-]
-]
-};
-try {
-await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
-} catch (e) {}
-await bot.sendVideo(callbackQuery.message.chat.id, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
-} catch (error) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kirim video SD!', show_alert: true });
-}
-} else if (data.startsWith('tt_hd_')) {
-const cacheKey = data.replace('tt_hd_', '');
-await bot.answerCallbackQuery(callbackQuery.id, { text: '⬇️ Mengirim video HD...' });
-try {
-const cached = global.tiktokCache?.[cacheKey];
-const videoUrl = cached?.downloadResult?.video_hd || cached?.videoInfo?.play;
-if (!videoUrl) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Video HD tidak tersedia!', show_alert: true });
-return;
-}
-cached.currentQuality = 'hd';
-cached.currentMedia = 'video';
-const formatNumber = (num) => {
-if (!num) return "0";
-if (num >= 1000000) return (num / 1000000).toFixed(1) + "M";
-if (num >= 1000) return (num / 1000).toFixed(1) + "K";
-return num.toString();
-};
-const caption = `<blockquote>📹 VIDEO TIKTOK HD</blockquote>\n
-<b>🎬 Judul:</b> ${escapeHTML(cached.videoInfo.title || 'Tidak ada judul')}\n
-<b>👤 Creator:</b> ${cached.authorUniqueId ? `@${escapeHTML(cached.authorUniqueId)}` : 'Tidak diketahui'}\n
-<b>📊 Statistik:</b>\n👁️ ${formatNumber(cached.videoInfo.play_count || 0)} views\n❤️ ${formatNumber(cached.videoInfo.digg_count || 0)} likes\n💬 ${formatNumber(cached.videoInfo.comment_count || 0)} comments\n🔁 ${formatNumber(cached.videoInfo.share_count || 0)} shares\n
-<b>⏱️ Durasi:</b> ${cached.videoInfo.duration || 0} detik\n
-<i>Video kualitas HD berhasil diunduh!</i>`;
-const keyboard = {
-inline_keyboard: [
-[
-{ text: "👤 LIHAT PROFIL", callback_data: `tt_profile_${cacheKey}` },
-{ text: "🎵 DOWNLOAD AUDIO", callback_data: `tt_audio_${cacheKey}` },
-{ text: "📹 DOWNLOAD SD", callback_data: `tt_sd_${cacheKey}` }
-],
-[
-{ text: "❌ BATAL", callback_data: `tt_cancel_${cacheKey}` }
-]
-]
-};
-try {
-await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
-} catch (e) {}
-await bot.sendVideo(callbackQuery.message.chat.id, videoUrl, { caption: caption, parse_mode: "HTML", reply_markup: keyboard });
-} catch (error) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Gagal kirim video HD!', show_alert: true });
-}
-} else if (data.startsWith('tt_cancel_')) {
-const cacheKey = data.replace('tt_cancel_', '');
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Dibatalkan' });
-try {
-const cached = global.tiktokCache?.[cacheKey];
-if (cached) {
-try {
-await bot.deleteMessage(callbackQuery.message.chat.id, callbackQuery.message.message_id);
-} catch (e) {}
-delete global.tiktokCache[cacheKey];
-}
-} catch (error) {
-console.log("Tidak bisa hapus pesan TikTok:", error.message);
-}
-} else if (data.startsWith('Status_')) {
-const orderId = data.replace('Status_', '');
-const statusData = await checkPaymentStatus(orderId);
-let statusText = 'MENUNGGU';
-if (statusData && statusData.transaction) {
-const status = (statusData.transaction.status || '').toString().toUpperCase();
-if (status.includes('SUCCESS') || status.includes('COMPLETED') || status.includes('PAID')) {
-statusText = '✅ BERHASIL';
-} else if (status.includes('FAILED') || status.includes('EXPIRED') || status.includes('CANCELLED')) {
-statusText = '❌ GAGAL';
-}
-}
-await bot.answerCallbackQuery(callbackQuery.id, {
-text: `Status: ${statusText}`,
-show_alert: true
-});
-} else if (data.startsWith('copy_')) {
-const orderId = data.replace('copy_', '');
-const transactions = loadTransactions();
-const transaction = transactions[orderId];
-if (transaction) {
-const copyText = `Username: ${transaction.username}\nPassword: ${transaction.password}\nEmail: ${transaction.email}\nPanel: ${transaction.panelType}\nOrder ID: ${orderId}`;
-await bot.answerCallbackQuery(callbackQuery.id, {
-text: 'Data disalin ke clipboard!',
-show_alert: true
-});
-}
-} else if (data.startsWith('cancel_')) {
-const orderId = data.replace('cancel_', '');
-if (global.pollingIntervals && global.pollingIntervals[orderId]) {
-const pollingData = global.pollingIntervals[orderId];
-if (pollingData.interval) {
-clearInterval(pollingData.interval);
-pollingData.isCancelled = true;
-}
-delete global.pollingIntervals[orderId];
-}
-const transactions = loadTransactions();
-if (transactions[orderId]) {
-transactions[orderId].status = 'cancelled';
-transactions[orderId].cancelledAt = new Date().toISOString();
-saveTransactions(transactions);
-}
-try {
-await bot.editMessageCaption(
-`<blockquote>┌─⧼ <b>❌ Pembayaran Dibatalkan</b> ⧽
-├ Pembayaran telah dibatalkan oleh pengguna.
-├ Order ID: <code>${orderId}</code>
-╰ Silakan mulai ulang jika ingin melanjutkan.</blockquote>`,
-{
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[
-{ text: '🔄 Buat Pesanan Baru', callback_data: 'createpanel' }
-]
-]
-}
-}
-);
-} catch (error) {
-console.error('Error updating cancelled message:', error);
-logError('CANCEL_CALLBACK_ERROR', `Order: ${orderId}, Error: ${error.message}`, userId, username);
-}
-setTimeout(() => {
-bot.deleteMessage(chatId, messageId).catch(() => {});
-}, 5000);
-await bot.answerCallbackQuery(callbackQuery.id, { 
-text: '✅ Pembayaran berhasil dibatalkan! Foto QR akan dihapus otomatis.', 
-show_alert: false 
-});
-} else if (data.startsWith('status_')) {
-const orderId = data.replace('status_', '');
-const transactions = loadTransactions();
-const transaction = transactions[orderId];
-if (transaction) {
-const statusMap = {
-'pending': '⏳ Menunggu Pembayaran',
-'completed': '✅ Berhasil',
-'failed': '❌ Gagal',
-'timeout': '⏰ Timeout',
-'cancelled': '⛔ Dibatalkan'
-};
-const status = statusMap[transaction.status] || '❓ Tidak Diketahui';
-await bot.answerCallbackQuery(callbackQuery.id, {
-text: `Status: ${status}`,
-show_alert: true
-});
-} else {
-await bot.answerCallbackQuery(callbackQuery.id, {
-text: 'Transaksi tidak ditemukan!',
-show_alert: true
-});
-}
-} else if (data.startsWith('cancel_seller_')) {
-const orderId = data.replace('cancel_seller_', '');
-if (global.pollingIntervals && global.pollingIntervals[orderId]) {
-const pollingData = global.pollingIntervals[orderId];
-if (pollingData.interval) {
-clearInterval(pollingData.interval);
-pollingData.isCancelled = true;
-}
-delete global.pollingIntervals[orderId];
-}
-const transactions = loadTransactions();
-if (transactions[orderId]) {
-transactions[orderId].status = 'cancelled';
-saveTransactions(transactions);
-}
-try {
-await bot.editMessageCaption(
-`<blockquote>┌─⧼ <b>❌ Seller Upgrade Dibatalkan</b> ⧽
-┃ Upgrade seller telah dibatalkan.
-┃ Order ID: <code>${orderId}</code>
-╰ Ketik /addseller untuk mencoba lagi</blockquote>`,
-{
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML'
-}
-);
-} catch (error) {
-console.error('Error updating cancelled seller message:', error);
-logError('SELLER_CANCEL_ERROR', `Order: ${orderId}, Error: ${error.message}`, userId, username);
-}
-setTimeout(() => {
-bot.deleteMessage(chatId, messageId).catch(() => {});
-}, 5000);
-await bot.answerCallbackQuery(callbackQuery.id, { 
-text: '✅ Seller upgrade dibatalkan! Foto QR akan dihapus otomatis.', 
-show_alert: false 
-});
-} else if (data === 'cek_id') {
-try {
-const users = loadUsers();
-const userData = users[userId] || {};
-const joinDate = userData.joinedAt ? new Date(userData.joinedAt).toLocaleDateString('id-ID') : 'Tidak diketahui';
-const lastSeen = userData.lastSeen ? new Date(userData.lastSeen).toLocaleString('id-ID') : 'Tidak diketahui';
-const isUserReseller = isReseller(userId);
-const isUserAdmin = isAdmin(userId);
-let status = 'User';
-if (isUserAdmin) {
-status = 'Admin 🜲';
-} else if (isUserReseller) {
-status = 'Seller';
-}
-const now = new Date();
-const formattedDate = now.toLocaleDateString('id-ID', { 
-weekday: 'long', 
-year: 'numeric', 
-month: 'long', 
-day: 'numeric' 
-});
-const formattedTime = now.toLocaleTimeString('id-ID', { 
-hour: '2-digit', 
-minute: '2-digit' 
-});
-const cekIdText = `<blockquote>┌─⧼ <b>🆔 ɪɴꜰᴏʀᴍᴀꜱɪ ᴜꜱᴇʀ</b> ⧽
-┃ ⬡ User ID: <code>${userId}</code>
-┃ ⬡ Username: ${escapeHTML(username)}
-┃ ⬡ Nama: ${escapeHTML(callbackQuery.from.first_name || 'Tidak ada')}
-┃ ⬡ Status: ${escapeHTML(status)}
-┃ ⬡ Bergabung: ${escapeHTML(joinDate)}
-┃ ⬡ Terakhir dilihat: ${escapeHTML(lastSeen)}
-┃ ⬡ Tanggal: ${escapeHTML(formattedDate)}
-┃ ⬡ Jam: ${escapeHTML(formattedTime)}
-╰──────────────────⬣</blockquote>`;
-await bot.editMessageCaption(cekIdText, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '<< Kembali', callback_data: 'back' }]
-]
-}
-});
-await bot.answerCallbackQuery(callbackQuery.id, { 
-text: '✅ Informasi user ditampilkan', 
-show_alert: false 
-});
-} catch (error) {
-console.error('Error in cek_id callback:', error);
-await bot.answerCallbackQuery(callbackQuery.id, { 
-text: '❌ Gagal menampilkan informasi', 
-show_alert: true 
-});
-}
-} else if (data === 'createpanel' || data === 'create_panel') {
-const panelList = `<blockquote>┌─⧼ <b>ɪɴꜰᴏʀᴍᴀᴛɪᴏɴ</b> ⧽
-┃ ⬡<b>versi bot :</b> ${escapeHTML(config.VERSI)}
-┃ ⬡<b>owner :</b> ${escapeHTML(config.DEVCELOPER)}
-┃ ⬡<b>bot name :</b> ${escapeHTML(config.BOT_NAME)}
-╰────────────⬣
-┌─⧼ <b>ᴘᴀᴋᴇᴛ ᴘᴀɴᴇʟ</b> ⧽ 
-┃ ❏ ─· /1gb   [username,id] - Rp 1.000
-┃ ❏ ─· /2gb   [username,id] - Rp 2.000
-┃ ❏ ─· /3gb   [username,id] - Rp 3.000
-┃ ❏ ─· /4gb   [username,id] - Rp 4.000
-┃ ❏ ─· /5gb   [username,id] - Rp 5.000
-┃ ❏ ─· /6gb   [username,id] - Rp 7.000
-┃ ❏ ─· /7gb   [username,id] - Rp 8.000
-┃ ❏ ─· /8gb   [username,id] - Rp 9.000
-┃ ❏ ─· /9gb   [username,id] - Rp 10.000
-┃ ❏ ─· /10gb [username,id] - Rp 11.000
-┃ ❏ ─· /unli    [username,id] - Rp 12.000
-╰─────────────⬣</blockquote>`;
-await bot.editMessageCaption(panelList, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '<<', callback_data: 'back' }]
-]
-}
-});
-} else if (data === 'buy_seller') {
-const sellerInfo = `<blockquote>
-┌─⧼ <b>reseller panel Keuntungan:</b> ⧽
+}});}
+else if(data==='buy_seller'){
+const sellerInfo=`<blockquote>
+┏━⬣ ✧「 RESELLER PANEL 」✧
 ┃ ✅ Buat panel gratis tanpa batas
 ┃ ✅ Akses semua paket panel
 ┃ ✅ Prioritas support premium
 ┃ ✅ Bisa buat panel untuk orang lain
 ┃ ✅ Akses fitur seller dashboard
-╰────────────⬣
-
-┌─⧼ <b>Instruksi:</b> ⧽
-┃ 1: Ketik /addseller [ID_ANDA]
-┃ 2: Scan QR yang muncul
-┃ 3: bayar sesuai harga yang tertera
-┃ 4: Otomatis aktif seller panel
-╰─────────────⬣
-
-┌─⧼ <b>Catatan:</b> ⧽
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 INSTRUKSI 」✧
+┃ 1. Ketik /addseller [ID_ANDA]
+┃ 2. Scan QR yang muncul
+┃ 3. Bayar sesuai harga yang tertera
+┃ 4. Otomatis aktif seller panel
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 CATATAN 」✧
 ┃ ⚠️ Masukkan ID Telegram Anda
 ┃ Contoh: /addseller 123456789
 ┃ Dapatkan ID ketik /cekid
-╰─────────────⬣</blockquote>`;
-await bot.editMessageCaption(sellerInfo, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '<<', callback_data: 'back' }]
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(sellerInfo,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[{text:'<<',callback_data:'back'}]
 ]
-}
-});
-} else if (data === 'tools_menu') {
-const toolsList = `<blockquote>
-╭─━ ⧼ <b>ᴛᴏᴏʟꜱ ᴍᴇɴᴜ</b> ⧽
-┃ ❏ ─· /info
-┃ ❏ ─· /cekid
-┃ ❏ ─· /pin
-┃ ❏ ─· /play 
-┃ ❏ ─· /tourl
-┃ ❏ ─· /deploy
-┃ ❏ ─· /listseller
-┃ ❏ ─· /brat
-┃ ❏ ─· /iqc
-┃ ❏ ─· /hd
-┃ ❏ ─· /ssweb
-┃ ❏ ─· /tt
-┃ ❏ ─· /toblur
-┃ ❏ ─· /tohijab
-┃ ❏ ─· /tozombie
-┃ ❏ ─· /totua
-┃ ❏ ─· /topacar
-┃ ❏ ─· /tochibi
-┃ ❏ ─· /tofigure
-┃ ❏ ─· /toghibli
-┃ ❏ ─· /tojepang
-┃ ❏ ─· /tovintage
-┃ ❏ ─· /toanime
-┃ ❏ ─· /totato
-┃ ❏ ─· /toreal
-┃ ❏ ─· /tomirror
-┃ ❏ ─· /shortlink
-┃ ❏ ─· /tts
-╰──────────━𖣐
-╭─━ ⧼ <b>ᴘᴀᴋᴇᴛ ᴘᴀɴᴇʟ</b> ⧽
-┃ ❏ ─· /1gb name,id
-┃ ❏ ─· /unli name,id
-┃ ❏ ─· /cadmin name,id
-╰──────────━𖣐
-</blockquote>`;
-await bot.editMessageCaption(toolsList, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '<<', callback_data: 'back' }]
-]
-}
-});
-} else if (data === 'owner_menu' || data === 'ownermenu') {
-if (!isAdmin(userId)) {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '❌ Hanya admin yang bisa!', show_alert: true });
-return;
-}
-const otakai = loadOtakai();
-const aiStatus = otakai.ai_enabled ? '✅ AKTIF' : '⏸️ NONAKTIF';
-const ownerList = `<blockquote>┌─⧼ <b>ᴏᴡɴᴇʀ ᴍᴇɴᴜ</b> ⧽
-┃ ❏ ─· /addadmin [id]
-┃ ❏ ─· /cadmin username,id
-┃ ❏ ─· /delpanel [id]
-┃ ❏ ─· /deladmin [id]
-┃ ❏ ─· /addseller [id]
-┃ ❏ ─· /delseller [id]
-┃ ❏ ─· /broadcast [pesan]
-╰─────────────⬣
-┌─⧼ <b>🤖 AI KASIR SYSTEM</b> ⧽
-┃ ❏ ─· /ai on
-┃ ❏ ─· /ai off
-┃ ❏ ─· /aimemory
-╰─────────────⬣
-┌─⧼ <b>sʏsᴛᴇᴍ ᴍᴀɴᴀɢᴇᴍᴇɴᴛ</b> ⧽
-┃ ❏ ─· /update
-┃ ❏ ─· /backup
-┃ ❏ ─· /restart
-┃ ❏ ─· /logs
-╰─────────────⬣</blockquote>`;
-await bot.editMessageCaption(ownerList, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '<<', callback_data: 'back' }]
-]
-}
-});
-} else if (data === 'view_config') {
-const configData = getServerConfig();
-const otakai = loadOtakai();
-const aiStatus = otakai.ai_enabled ? 'AKTIF ✅' : 'NONAKTIF ⏸️';
-const totalMemoryUsers = Object.keys(otakai.users || {}).length;
-const configText = `<blockquote>┌─⧼ <b>ꜱᴇʀᴠᴇʀ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ</b> ⧽
-┃ CPU & Memory
-┃ CPU Load: ${configData.cpuLoad}%
-┃ Memory: ${configData.memory.used}MB / ${configData.memory.total}GB
-┃ Memory Usage: ${configData.memory.percent}%
-╰────────────⬣
-┌─⧼ <b>ꜱʏꜱᴛᴇᴍ ɪɴꜰᴏ</b> ⧽
-┃ Uptime: ${escapeHTML(configData.uptime)}
-┃ Platform: ${escapeHTML(configData.platform)}
-┃ Architecture: ${escapeHTML(configData.arch)}
-┃ Node.js: ${escapeHTML(configData.nodeVersion)}
-╰────────────⬣
-
-┌─⧼ <b>ʙᴏᴛ ɪɴꜰᴏ</b> ⧽
-┃ Bot Age: ${configData.botAge} days
-┃ Bot Version: ${escapeHTML(config.VERSI)}
-┃ Developer: ${escapeHTML(config.DEVCELOPER)}
-┃ Owner ID: ${escapeHTML(config.OWNER_ID)}
-╰────────────⬣
-┌─⧼ <b>🤖 AI KASIR STATUS</b> ⧽
-┃ Status: ${aiStatus}
-┃ Memory Users: ${totalMemoryUsers}
-╰────────────⬣
-┌─⧼ <b>ᴜsᴇʀ sᴛᴀᴛɪsᴛɪᴄs</b> ⧽
-┃ Total Users: ${configData.totalUsers || 0}
-┃ Total Sellers: ${configData.totalSellers || 0}
-┃ Total Admins: ${configData.totalAdmins || 0}
-╰────────────⬣</blockquote>`;
-await bot.editMessageCaption(configText, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '↻ Refresh', callback_data: 'refresh_config' }],
-[{ text: '<<', callback_data: 'back' }]
-]
-}
-});
-} else if (data === 'refresh_config') {
-await bot.answerCallbackQuery(callbackQuery.id, { text: '✅ Config refreshed!', show_alert: false });
-const configData = getServerConfig();
-const resellerData = loadReseller();
-const totalSellers = Object.keys(resellerData).length;
-const adminData = loadAdmins();
-const totalAdmins = Object.keys(adminData).length;
-const usersData = loadUsers();
-const totalUsers = Object.keys(usersData).length;
-const otakai = loadOtakai();
-const aiStatus = otakai.ai_enabled ? 'AKTIF ✅' : 'NONAKTIF ⏸️';
-const totalMemoryUsers = Object.keys(otakai.users || {}).length;
-const configText = `<blockquote>┌─⧼ <b>ꜱᴇʀᴠᴇʀ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ</b> ⧽
-┃ CPU & Memory
-┃ CPU Load: ${configData.cpuLoad}%
-┃ Memory: ${configData.memory.used}MB / ${configData.memory.total}GB
-┃ Memory Usage: ${configData.memory.percent}%
-╰────────────⬣
-┌─⧼ <b>ꜱʏꜱᴛᴇᴍ ɪɴꜰᴏ</b> ⧽
-┃ Uptime: ${escapeHTML(configData.uptime)}
-┃ Platform: ${escapeHTML(configData.platform)}
-┃ Architecture: ${escapeHTML(configData.arch)}
-┃ Node.js: ${escapeHTML(configData.nodeVersion)}
-╰────────────⬣
-
-┌─⧼ <b>ʙᴏᴛ ɪɴꜰᴏ</b> ⧽
-┃ Bot Age: ${configData.botAge} days
-┃ Bot Version: ${escapeHTML(config.VERSI)}
-┃ Developer: ${escapeHTML(config.DEVCELOPER)}
-┃ Owner ID: ${escapeHTML(config.OWNER_ID)}
-╰────────────⬣
-┌─⧼ <b>🤖 AI KASIR STATUS</b> ⧽
-┃ Status: ${aiStatus}
-┃ Memory Users: ${totalMemoryUsers}
-┃ API: ${escapeHTML(AI_API_URL)}
-╰────────────⬣
-┌─⧼ <b>ᴜsᴇʀ sᴛᴀᴛɪsᴛɪᴄs</b> ⧽
-┃ Total Users: ${totalUsers}
-┃ Total Sellers: ${totalSellers}
-┃ Total Admins: ${totalAdmins}
-╰────────────⬣</blockquote>`;
-await bot.editMessageCaption(configText, {
-chat_id: chatId,
-message_id: messageId,
-parse_mode: 'HTML',
-reply_markup: {
-inline_keyboard: [
-[{ text: '↻ Refresh', callback_data: 'refresh_config' }],
-[{ text: '<<', callback_data: 'back' }]
-]
-}
-});
-} else if (data === 'back' || data === 'back_to_menu') {
-try {
-const users = loadUsers();
-const isUserReseller = isReseller(userId);
-const isUserAdmin = isAdmin(userId);
-let status = 'User';
-if (isUserAdmin) {
-status = 'Admin 🜲';
-} else if (isUserReseller) {
-status = 'Seller';
-}
-const uptime = os.uptime();
-const vpsUptimeStr = `${Math.floor(uptime / 86400)}d ${Math.floor((uptime % 86400) / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`;
-const totalUsers = Object.keys(users).length;
-const caption = `<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
-안녕하세요 사용자, 환영합니다!
-
-<blockquote><b>Status :</b> ${escapeHTML(status)}
-<b>bot name :</b> ${escapeHTML(config.BOT_NAME)}
-<b>versi bot :</b> ${escapeHTML(config.VERSI)}
-<b>Total User :</b> ${totalUsers} User
-<b>Waktu :</b> ${new Date().toLocaleTimeString('id-ID', {hour12: false})}</blockquote>
-
-Ini adalah durasi aktif panel
-<blockquote>📡 ${escapeHTML(vpsUptimeStr)}</blockquote>`;
-const buttons = {
-inline_keyboard: [
+}});}
+else if(data==='tools_menu'){
+const toolsList=`<blockquote>
+┏━⬣ ✧「 TOOLS MENU 」✧
+┃ 📥 Downloader Tools
+┃ 🎨 Converter Tools
+┗━━━━━━━━━━━━━━━━━━⬣
+<i>Pilih kategori tools yang ingin digunakan</i></blockquote>`;
+await bot.editMessageCaption(toolsList,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
 [
-{ text: "⿻ ᴄʀᴇᴀᴛᴇ ᴘᴀɴᴇʟ", callback_data: "createpanel" },
-{ text: "⿻ ᴜᴘɢʀᴀᴅᴇ sᴇʟʟᴇʀ", callback_data: "buy_seller" }
+{text:'📥 Downloader',callback_data:'tools_downloader'},
+{text:'🎨 Converter',callback_data:'tools_converter'}
 ],
 [
-{ text: "ᴛᴏᴏʟꜱ ᴍᴇɴᴜ", callback_data: "tools_menu" },
-{ text: "ᴏᴡɴᴇʀ ᴍᴇɴᴜ", callback_data: "ownermenu" }
+{text:'<< Kembali',callback_data:'back'}
+]
+]
+}});}
+else if(data==='tools_downloader'){
+const downloaderList=`<blockquote>
+┏━⬣ ✧「 DOWNLOADER TOOLS 」✧
+┃ ✧ /pin [url] - Download Pinterest
+┃ ✧ /play [url] - Download YouTube
+┃ ✧ /tt [url] - Download TikTok
+┃ ✧ /hd [url] - Download HD Video
+┃ ✧ /hdvid [url] - Download HD Video+
+┃ ✧ /ssweb [url] - Screenshot Website
+┃ ✧ /tourl [file] - Convert ke URL
+┃ ✧ /shortlink [url] - Pendekkan URL
+┃ ✧ /web2zip [url] - Website ke ZIP
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(downloaderList,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'🎨 Converter',callback_data:'tools_converter'},
+{text:'⚙️ Lainnya',callback_data:'tools_other'}
 ],
 [
-{ text: "ᴠɪᴇᴡ ᴄᴏɴꜰɪɢ", callback_data: "view_config" },
-{ text: "ᴄᴇᴋ ɪᴅ", callback_data: "cek_id" }
+{text:'🔙 Kembali',callback_data:'tools_menu'}
+]
+]
+}});}
+else if(data==='tools_converter'){
+const converterList=`<blockquote>
+┏━⬣ ✧「 CONVERTER TOOLS 」✧
+┃ ✧ /toblur [foto] - Blur Gambar
+┃ ✧ /tohijab [foto] - Hijab Filter
+┃ ✧ /tozombie [foto] - Zombie Filter
+┃ ✧ /totua [foto] - Tua Filter
+┃ ✧ /topacar [foto] - Pacar Filter
+┃ ✧ /tochibi [foto] - Chibi Filter
+┃ ✧ /tofigure [foto] - Figure Filter
+┃ ✧ /toghibli [foto] - Ghibli Filter
+┃ ✧ /tojepang [foto] - Jepang Filter
+┃ ✧ /tovintage [foto] - Vintage Filter
+┃ ✧ /toanime [foto] - Anime Filter
+┃ ✧ /totato [foto] - Tato Filter
+┃ ✧ /toreal [foto] - Real Filter
+┃ ✧ /tomirror [foto] - Mirror Filter
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(converterList,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'📥 Downloader',callback_data:'tools_downloader'},
+{text:'⚙️ Lainnya',callback_data:'tools_other'}
 ],
 [
-{ text: "ᴊᴏɪɴ ᴄʜᴀɴɴᴇʟ", url: "https://t.me/botzmarket59" }
+{text:'🔙 Kembali',callback_data:'tools_menu'}
+]
+]
+}});}
+else if(data==='tools_other'){
+const otherList=`<blockquote>
+┏━⬣ ✧「 OTHER TOOLS 」✧
+┃ ✧ /info - Bot Info
+┃ ✧ /cekid - Cek ID User
+┃ ✧ /deploy - Deploy Script
+┃ ✧ /listseller - List Seller
+┃ ✧ /brat - Brain Test
+┃ ✧ /iqc - IQ Test
+┃ ✧ /tts [text] - Text to Speech
+┃ ✧ /react [emoji] - Reaction
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(otherList,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'📥 Downloader',callback_data:'tools_downloader'},
+{text:'🎨 Converter',callback_data:'tools_converter'}
 ],
 [
-{ text: "ᴄʜᴀᴛ ᴀᴅᴍɪɴ", url: config.URLADMIN }
+{text:'🔙 Kembali',callback_data:'tools_menu'}
+]
+]
+}});}
+else if(data==='owner_menu'||data==='ownermenu'){
+if(!isAdmin(userId)){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Hanya admin yang bisa!',show_alert:true});
+return;}
+const otakai=loadOtakai();
+const aiStatus=otakai.ai_enabled?'AKTIF 🔓':'NONAKTIF 🔒';
+const ownerList=`<blockquote>
+┏━⬣ ✧「 OWNER MENU 」✧
+┃ ✧ /addadmin [id]
+┃ ✧ /cadmin [username,id]
+┃ ✧ /delpanel [id]
+┃ ✧ /deladmin [id]
+┃ ✧ /addseller [id]
+┃ ✧ /delseller [id]
+┃ ✧ /broadcast [pesan]
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 AI KASIR SYSTEM 」✧
+┃ ✧ /ai on & off
+┃ ✧ /aimemory
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 SYSTEM MANAGEMENT 」✧
+┃ ✧ /update
+┃ ✧ /backup
+┃ ✧ /restart
+┃ ✧ /logs
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(ownerList,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[{text:'<<',callback_data:'back'}]
+]
+}});}
+else if(data==='view_config'){
+const configData=getServerConfig();
+const otakai=loadOtakai();
+const aiStatus=otakai.ai_enabled?'AKTIF 🔓':'NONAKTIF 🔒';
+const totalMemoryUsers=Object.keys(otakai.users||{}).length;
+const configText=`<blockquote>
+┏━⬣ ✧「 SERVER CONFIGURATION 」✧
+┃ ✧ CPU Load: ${configData.cpuLoad}%
+┃ ✧ Memory: ${configData.memory.used}MB / ${configData.memory.total}GB
+┃ ✧ Memory Usage: ${configData.memory.percent}%
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 SYSTEM INFO 」✧
+┃ ✧ Uptime: ${escapeHTML(configData.uptime)}
+┃ ✧ Platform: ${escapeHTML(configData.platform)}
+┃ ✧ Architecture: ${escapeHTML(configData.arch)}
+┃ ✧ Node.js: ${escapeHTML(configData.nodeVersion)}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 BOT INFO 」✧
+┃ ✧ Bot Age: ${configData.botAge} days
+┃ ✧ Bot Version: ${escapeHTML(config.VERSI)}
+┃ ✧ Developer: ${escapeHTML(config.DEVCELOPER)}
+┃ ✧ Owner ID: ${escapeHTML(config.OWNER_ID)}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 AI KASIR STATUS 」✧
+┃ ✧ Status: ${aiStatus}
+┃ ✧ Memory Users: ${totalMemoryUsers}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 USER STATISTICS 」✧
+┃ ✧ Total Users: ${configData.totalUsers||0}
+┃ ✧ Total Sellers: ${configData.totalSellers||0}
+┃ ✧ Total Admins: ${configData.totalAdmins||0}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(configText,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[{text:'↻ Refresh',callback_data:'refresh_config'}],
+[{text:'<<',callback_data:'back'}]
+]
+}});}
+else if(data==='refresh_config'){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'⫹⫺ Config refreshed!',show_alert:false});
+const configData=getServerConfig();
+const resellerData=loadReseller();
+const totalSellers=Object.keys(resellerData).length;
+const adminData=loadAdmins();
+const totalAdmins=Object.keys(adminData).length;
+const usersData=loadUsers();
+const totalUsers=Object.keys(usersData).length;
+const otakai=loadOtakai();
+const aiStatus=otakai.ai_enabled?'AKTIF 🔓':'NONAKTIF 🔒';
+const totalMemoryUsers=Object.keys(otakai.users||{}).length;
+const configText=`<blockquote>
+┏━⬣ ✧「 SERVER CONFIGURATION 」✧
+┃ ✧ CPU Load: ${configData.cpuLoad}%
+┃ ✧ Memory: ${configData.memory.used}MB / ${configData.memory.total}GB
+┃ ✧ Memory Usage: ${configData.memory.percent}%
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 SYSTEM INFO 」✧
+┃ ✧ Uptime: ${escapeHTML(configData.uptime)}
+┃ ✧ Platform: ${escapeHTML(configData.platform)}
+┃ ✧ Architecture: ${escapeHTML(configData.arch)}
+┃ ✧ Node.js: ${escapeHTML(configData.nodeVersion)}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 BOT INFO 」✧
+┃ ✧ Bot Age: ${configData.botAge} days
+┃ ✧ Bot Version: ${escapeHTML(config.VERSI)}
+┃ ✧ Developer: ${escapeHTML(config.DEVCELOPER)}
+┃ ✧ Owner ID: ${escapeHTML(config.OWNER_ID)}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 AI KASIR STATUS 」✧
+┃ ✧ Status: ${aiStatus}
+┃ ✧ Memory Users: ${totalMemoryUsers}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 USER STATISTICS 」✧
+┃ ✧ Total Users: ${totalUsers}
+┃ ✧ Total Sellers: ${totalSellers}
+┃ ✧ Total Admins: ${totalAdmins}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(configText,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[{text:'↻ Refresh',callback_data:'refresh_config'}],
+[{text:'<<',callback_data:'back'}]
+]
+}});}
+else if(data==='cek_id'){
+try{
+const users=loadUsers();
+const userData=users[userId]||{};
+const joinDate=userData.joinedAt?new Date(userData.joinedAt).toLocaleDateString('id-ID'):'Tidak diketahui';
+const lastSeen=userData.lastSeen?new Date(userData.lastSeen).toLocaleString('id-ID'):'Tidak diketahui';
+const isUserReseller=isReseller(userId);
+const isUserAdmin=isAdmin(userId);
+let status='User';
+if(isUserAdmin){
+status='Admin 🜲';}else if(isUserReseller){
+status='Seller';}
+const now=new Date();
+const formattedDate=now.toLocaleDateString('id-ID',{ 
+weekday:'long', 
+year:'numeric', 
+month:'long', 
+day:'numeric'});
+const formattedTime=now.toLocaleTimeString('id-ID',{ 
+hour:'2-digit', 
+minute:'2-digit'});
+const cekIdText=`<blockquote>┏━⬣ ✧「 INFORMASI USER 」✧
+┃ ✧ User ID: <code>${userId}</code>
+┃ ✧ Username: ${escapeHTML(username)}
+┃ ✧ Nama: ${escapeHTML(callbackQuery.from.first_name||'Tidak ada')}
+┃ ✧ Status: ${escapeHTML(status)}
+┃ ✧ Bergabung: ${escapeHTML(joinDate)}
+┃ ✧ Terakhir dilihat: ${escapeHTML(lastSeen)}
+┃ ✧ Tanggal: ${escapeHTML(formattedDate)}
+┃ ✧ Jam: ${escapeHTML(formattedTime)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(cekIdText,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[{text:'<< Kembali',callback_data:'back'}]
+]
+}});
+await bot.answerCallbackQuery(callbackQuery.id,{ 
+text:'✅ Informasi user ditampilkan', 
+show_alert:false});}catch(error){
+console.error('Error in cek_id callback:',error);
+await bot.answerCallbackQuery(callbackQuery.id,{ 
+text:'❌ Gagal menampilkan informasi', 
+show_alert:true});}}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📹 CALLBACK UNTUK TIKTOK DOWNLOADER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data.startsWith('tt_profile_')){
+const cacheKey=data.replace('tt_profile_','');
+await bot.answerCallbackQuery(callbackQuery.id,{text:'📡 Mengambil data profil...'});
+try{
+const cached=global.tiktokCache?.[cacheKey];
+if(!cached?.authorUniqueId){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Data profil tidak ditemukan!',show_alert:true});
+return;}
+const response=await axios.get(`https://api.resellergaming.my.id/stalk/tiktok?username=${encodeURIComponent(cached.authorUniqueId)}`,{timeout:15000});
+const stalkData=response.data;
+if(stalkData.status&&stalkData.result){
+const user=stalkData.result;
+const formatNumber=(num)=>{
+if(!num)return"0";
+if(num>=1000000)return(num/1000000).toFixed(1)+"M";
+if(num>=1000)return(num/1000).toFixed(1)+"K";
+return num.toString();};
+let profileMsg=`<blockquote>┏━⬣ ✧「 PROFIL TIKTOK 」✧
+┃ ✧ Nickname: ${escapeHTML(user.nickname)}
+┃ ✧ Username: @${escapeHTML(user.uniqueId)}
+┃ ✧ Signature: ${escapeHTML(user.signature||'Tidak ada')}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 STATISTIK 」✧
+┃ ✧ Followers: ${formatNumber(user.followers)}
+┃ ✧ Following: ${formatNumber(user.following)}
+┃ ✧ Total Like: ${formatNumber(user.likes)}
+┃ ✧ Total Video: ${formatNumber(user.videos)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+<i>Data diambil dari API stalk TikTok</i>`;
+const keyboard={
+inline_keyboard:[
+[
+{text:"📹 KEMBALI KE VIDEO",callback_data:`tt_back_video_${cacheKey}`},
+{text:"🎵 DOWNLOAD AUDIO",callback_data:`tt_audio_${cacheKey}`}
+],
+[
+{text:"❌ BATAL",callback_data:`tt_cancel_${cacheKey}`}
+]
+]};
+try{await bot.deleteMessage(callbackQuery.message.chat.id,callbackQuery.message.message_id);}catch(e){}
+if(user.avatar){
+await bot.sendPhoto(callbackQuery.message.chat.id,user.avatar,{caption:profileMsg,parse_mode:"HTML",reply_markup:keyboard});}else{
+await bot.sendMessage(callbackQuery.message.chat.id,profileMsg,{parse_mode:"HTML",reply_markup:keyboard});}}else{
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Gagal ambil profil!',show_alert:true});}}catch(error){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Error ambil profil!',show_alert:true});}}
+else if(data.startsWith('tt_back_video_')){
+const cacheKey=data.replace('tt_back_video_','');
+await bot.answerCallbackQuery(callbackQuery.id,{text:'↩️ Kembali ke video...'});
+try{
+const cached=global.tiktokCache?.[cacheKey];
+if(!cached){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Data tidak ditemukan!',show_alert:true});
+return;}
+const videoUrl=cached.currentQuality==='hd'?
+(cached.downloadResult?.video_hd||cached.videoInfo.play):
+(cached.downloadResult?.video_sd||cached.videoInfo.wmplay||cached.videoInfo.play);
+const formatNumber=(num)=>{
+if(!num)return"0";
+if(num>=1000000)return(num/1000000).toFixed(1)+"M";
+if(num>=1000)return(num/1000).toFixed(1)+"K";
+return num.toString();};
+const caption=`<blockquote>┏━⬣ ✧「 TIKTOK DOWNLOADER 」✧
+┃ ✧ Judul: ${escapeHTML(cached.videoInfo.title||'Tidak ada judul')}
+┃ ✧ Creator: ${cached.authorUniqueId?`@${escapeHTML(cached.authorUniqueId)}`:'Tidak diketahui'}
+┃ ✧ Durasi: ${cached.videoInfo.duration||0} detik
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 STATISTIK 」✧
+┃ ✧ 👁️ ${formatNumber(cached.videoInfo.play_count||0)} views
+┃ ✧ ❤️ ${formatNumber(cached.videoInfo.digg_count||0)} likes
+┃ ✧ 💬 ${formatNumber(cached.videoInfo.comment_count||0)} comments
+┃ ✧ 🔁 ${formatNumber(cached.videoInfo.share_count||0)} shares
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+<i>Pilih opsi di bawah:</i>`;
+const qualityButtons=[];
+if(cached.currentQuality==='hd'){
+qualityButtons.push({text:"📹 DOWNLOAD SD",callback_data:`tt_sd_${cacheKey}`});}else{
+qualityButtons.push({text:"📹 KUALITAS HD",callback_data:`tt_hd_${cacheKey}`});}
+const keyboard={
+inline_keyboard:[
+[
+{text:"👤 LIHAT PROFIL",callback_data:`tt_profile_${cacheKey}`},
+{text:"🎵 DOWNLOAD AUDIO",callback_data:`tt_audio_${cacheKey}`},
+...qualityButtons
+],
+[
+{text:"❌ BATAL",callback_data:`tt_cancel_${cacheKey}`}
+]
+]};
+try{await bot.deleteMessage(callbackQuery.message.chat.id,callbackQuery.message.message_id);}catch(e){}
+await bot.sendVideo(callbackQuery.message.chat.id,videoUrl,{caption:caption,parse_mode:"HTML",reply_markup:keyboard});}catch(error){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Gagal kembali ke video!',show_alert:true});}}
+else if(data.startsWith('tt_audio_')){
+const cacheKey=data.replace('tt_audio_','');
+await bot.answerCallbackQuery(callbackQuery.id,{text:'⬇️ Mengirim audio...'});
+try{
+const cached=global.tiktokCache?.[cacheKey];
+if(!cached?.downloadResult?.mp3){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Audio tidak tersedia!',show_alert:true});
+return;}
+const formatNumber=(num)=>{
+if(!num)return"0";
+if(num>=1000000)return(num/1000000).toFixed(1)+"M";
+if(num>=1000)return(num/1000).toFixed(1)+"K";
+return num.toString();};
+const caption=`<blockquote>┏━⬣ ✧「 AUDIO TIKTOK 」✧
+┃ ✧ Judul: ${escapeHTML(cached.videoInfo.title||'Tidak ada judul')}
+┃ ✧ Creator: ${cached.authorUniqueId?`@${escapeHTML(cached.authorUniqueId)}`:'Tidak diketahui'}
+┃ ✧ Durasi: ${cached.videoInfo.duration||0} detik
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 STATISTIK 」✧
+┃ ✧ 👁️ ${formatNumber(cached.videoInfo.play_count||0)} views
+┃ ✧ ❤️ ${formatNumber(cached.videoInfo.digg_count||0)} likes
+┃ ✧ 💬 ${formatNumber(cached.videoInfo.comment_count||0)} comments
+┃ ✧ 🔁 ${formatNumber(cached.videoInfo.share_count||0)} shares
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+<i>Audio berhasil diunduh!</i>`;
+const keyboard={
+inline_keyboard:[
+[
+{text:"👤 LIHAT PROFIL",callback_data:`tt_profile_${cacheKey}`},
+{text:"📹 KEMBALI KE VIDEO",callback_data:`tt_back_video_${cacheKey}`}
+],
+[
+{text:"❌ BATAL",callback_data:`tt_cancel_${cacheKey}`}
+]
+]};
+try{await bot.deleteMessage(callbackQuery.message.chat.id,callbackQuery.message.message_id);}catch(e){}
+await bot.sendAudio(callbackQuery.message.chat.id,cached.downloadResult.mp3,{caption:caption,parse_mode:"HTML",reply_markup:keyboard});}catch(error){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Gagal kirim audio!',show_alert:true});}}
+else if(data.startsWith('tt_sd_')){
+const cacheKey=data.replace('tt_sd_','');
+await bot.answerCallbackQuery(callbackQuery.id,{text:'⬇️ Mengirim video SD...'});
+try{
+const cached=global.tiktokCache?.[cacheKey];
+const videoUrl=cached?.downloadResult?.video_sd||cached?.videoInfo?.wmplay||cached?.videoInfo?.play;
+if(!videoUrl){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Video SD tidak tersedia!',show_alert:true});
+return;}
+cached.currentQuality='sd';
+cached.currentMedia='video';
+const formatNumber=(num)=>{
+if(!num)return"0";
+if(num>=1000000)return(num/1000000).toFixed(1)+"M";
+if(num>=1000)return(num/1000).toFixed(1)+"K";
+return num.toString();};
+const caption=`<blockquote>┏━⬣ ✧「 VIDEO TIKTOK SD 」✧
+┃ ✧ Judul: ${escapeHTML(cached.videoInfo.title||'Tidak ada judul')}
+┃ ✧ Creator: ${cached.authorUniqueId?`@${escapeHTML(cached.authorUniqueId)}`:'Tidak diketahui'}
+┃ ✧ Durasi: ${cached.videoInfo.duration||0} detik
+┃ ✧ Kualitas: STANDARD DEFINITION
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 STATISTIK 」✧
+┃ ✧ 👁️ ${formatNumber(cached.videoInfo.play_count||0)} views
+┃ ✧ ❤️ ${formatNumber(cached.videoInfo.digg_count||0)} likes
+┃ ✧ 💬 ${formatNumber(cached.videoInfo.comment_count||0)} comments
+┃ ✧ 🔁 ${formatNumber(cached.videoInfo.share_count||0)} shares
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+<i>Video kualitas SD berhasil diunduh!</i>`;
+const keyboard={
+inline_keyboard:[
+[
+{text:"👤 LIHAT PROFIL",callback_data:`tt_profile_${cacheKey}`},
+{text:"🎵 DOWNLOAD AUDIO",callback_data:`tt_audio_${cacheKey}`},
+{text:"📹 KUALITAS HD",callback_data:`tt_hd_${cacheKey}`}
+],
+[
+{text:"❌ BATAL",callback_data:`tt_cancel_${cacheKey}`}
+]
+]};
+try{await bot.deleteMessage(callbackQuery.message.chat.id,callbackQuery.message.message_id);}catch(e){}
+await bot.sendVideo(callbackQuery.message.chat.id,videoUrl,{caption:caption,parse_mode:"HTML",reply_markup:keyboard});}catch(error){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Gagal kirim video SD!',show_alert:true});}}
+else if(data.startsWith('tt_hd_')){
+const cacheKey=data.replace('tt_hd_','');
+await bot.answerCallbackQuery(callbackQuery.id,{text:'⬇️ Mengirim video HD...'});
+try{
+const cached=global.tiktokCache?.[cacheKey];
+const videoUrl=cached?.downloadResult?.video_hd||cached?.videoInfo?.play;
+if(!videoUrl){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Video HD tidak tersedia!',show_alert:true});
+return;}
+cached.currentQuality='hd';
+cached.currentMedia='video';
+const formatNumber=(num)=>{
+if(!num)return"0";
+if(num>=1000000)return(num/1000000).toFixed(1)+"M";
+if(num>=1000)return(num/1000).toFixed(1)+"K";
+return num.toString();};
+const caption=`<blockquote>┏━⬣ ✧「 VIDEO TIKTOK HD 」✧
+┃ ✧ Judul: ${escapeHTML(cached.videoInfo.title||'Tidak ada judul')}
+┃ ✧ Creator: ${cached.authorUniqueId?`@${escapeHTML(cached.authorUniqueId)}`:'Tidak diketahui'}
+┃ ✧ Durasi: ${cached.videoInfo.duration||0} detik
+┃ ✧ Kualitas: HIGH DEFINITION
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 STATISTIK 」✧
+┃ ✧ 👁️ ${formatNumber(cached.videoInfo.play_count||0)} views
+┃ ✧ ❤️ ${formatNumber(cached.videoInfo.digg_count||0)} likes
+┃ ✧ 💬 ${formatNumber(cached.videoInfo.comment_count||0)} comments
+┃ ✧ 🔁 ${formatNumber(cached.videoInfo.share_count||0)} shares
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+<i>Video kualitas HD berhasil diunduh!</i>`;
+const keyboard={
+inline_keyboard:[
+[
+{text:"👤 LIHAT PROFIL",callback_data:`tt_profile_${cacheKey}`},
+{text:"🎵 DOWNLOAD AUDIO",callback_data:`tt_audio_${cacheKey}`},
+{text:"📹 DOWNLOAD SD",callback_data:`tt_sd_${cacheKey}`}
+],
+[
+{text:"❌ BATAL",callback_data:`tt_cancel_${cacheKey}`}
+]
+]};
+try{await bot.deleteMessage(callbackQuery.message.chat.id,callbackQuery.message.message_id);}catch(e){}
+await bot.sendVideo(callbackQuery.message.chat.id,videoUrl,{caption:caption,parse_mode:"HTML",reply_markup:keyboard});}catch(error){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Gagal kirim video HD!',show_alert:true});}}
+else if(data.startsWith('tt_cancel_')){
+const cacheKey=data.replace('tt_cancel_','');
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Dibatalkan'});
+try{
+const cached=global.tiktokCache?.[cacheKey];
+if(cached){
+try{await bot.deleteMessage(callbackQuery.message.chat.id,callbackQuery.message.message_id);}catch(e){}
+delete global.tiktokCache[cacheKey];}}catch(error){
+console.log("Tidak bisa hapus pesan TikTok:",error.message);}}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🔊 CALLBACK UNTUK TTS (TEXT TO SPEECH)
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data.startsWith('tts_')){
+const parts=data.split('_');
+const voiceCode=parts[1];
+const encodedText=parts.slice(2).join('_');
+const text=decodeURIComponent(encodedText);
+await bot.answerCallbackQuery(callbackQuery.id,{ 
+text:`Membuat audio ${voiceCode==='id'?'Indonesia':voiceCode==='usf'?'US Female':voiceCode==='usm'?'US Male':voiceCode==='jp'?'Japanese':voiceCode==='kr'?'Korean':'Unknown'}...`, 
+show_alert:false});
+if(!text){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Teks tidak ditemukan!',show_alert:true});
+return;}
+try{
+let voiceType='id_001';
+switch(voiceCode){
+case'id':voiceType='id_001';break;
+case'usf':voiceType='en_us_001';break;
+case'usm':voiceType='en_us_006';break;
+case'jp':voiceType='jp_001';break;
+case'kr':voiceType='kr_001';break;}
+const encodedApiText=encodeURIComponent(text);
+const apiUrl=`https://exsalapi.my.id/api/audio/tiktok-tts?text=${encodedApiText}&voice=${voiceType}&apikey=${AI_API_KEY}`;
+const response=await fetch(apiUrl);
+if(!response.ok)throw new Error(`HTTP ${response.status}`);
+const apiData=await response.json();
+if(!apiData.status||!apiData.data||!apiData.data.url)throw new Error('API gagal membuat audio');
+const audioResponse=await fetch(apiData.data.url);
+if(!audioResponse.ok)throw new Error(`Gagal mengunduh audio:${audioResponse.status}`);
+const audioBuffer=await audioResponse.arrayBuffer();
+const voiceNames={
+'id':'🇮🇩 Indonesia',
+'usf':'🇺🇸 US Female',
+'usm':'🇺🇸 US Male',
+'jp':'🇯🇵 Japanese',
+'kr':'🇰🇷 Korean'};
+const voiceName=voiceNames[voiceCode]||'Unknown';
+const keyboard={
+inline_keyboard:[
+[
+{text:voiceCode==='id'?'✅ Indonesia':'🇮🇩 Indonesia',callback_data:`tts_id_${encodeURIComponent(text.substring(0,100))}`},
+{text:voiceCode==='usf'?'✅ US Female':'🇺🇸 US Female',callback_data:`tts_usf_${encodeURIComponent(text.substring(0,100))}`}
+],
+[
+{text:voiceCode==='usm'?'✅ US Male':'🇺🇸 US Male',callback_data:`tts_usm_${encodeURIComponent(text.substring(0,100))}`},
+{text:voiceCode==='jp'?'✅ Japanese':'🇯🇵 Japanese',callback_data:`tts_jp_${encodeURIComponent(text.substring(0,100))}`}
+],
+[
+{text:voiceCode==='kr'?'✅ Korean':'🇰🇷 Korean',callback_data:`tts_kr_${encodeURIComponent(text.substring(0,100))}`}
+]
+]};
+try{
+await bot.deleteMessage(chatId,messageId);}catch(e){
+console.log('Tidak bisa hapus pesan TTS lama:',e.message);}
+const sentMessage=await bot.sendAudio(chatId,Buffer.from(audioBuffer),{
+caption:`<blockquote>┏━⬣ ✧「 TTS AUDIO 」✧
+┃ ✧ Suara: ${voiceName}
+┃ ✧ Panjang: ${text.length} karakter
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+
+<b>Teks:</b> ${escapeHTML(text.substring(0,100))}${text.length>100?'...':''}
+
+<i>Pilih suara lain:</i>`,
+parse_mode:'HTML',
+reply_markup:keyboard});
+if(!global.ttsCache)global.ttsCache={};
+const cacheKey=`tts_${sentMessage.message_id}`;
+global.ttsCache[cacheKey]={
+text:text,
+messageId:sentMessage.message_id,
+chatId:chatId};}catch(error){
+console.error('TTS callback error:',error);
+await bot.answerCallbackQuery(callbackQuery.id,{text:`❌ Gagal membuat audio: ${error.message.substring(0,50)}`,show_alert:true});}}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📌 CALLBACK UNTUK PINTEREST DOWNLOADER
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data.startsWith("pin_")){
+try{
+const[action,chatId,idxStr]=data.split("|");
+const messageId=callbackQuery.message.message_id;
+const pinData=global.pinData?.[messageId];
+if(!pinData)return bot.answerCallbackQuery(callbackQuery.id,{text:"⚠️ Data sudah kadaluarsa."});
+let index=parseInt(idxStr);
+if(action==="pin_next")index=(index+1)%pinData.results.length;
+if(action==="pin_prev")index=(index-1+pinData.results.length)%pinData.results.length;
+const item=pinData.results[index];
+const inlineKeyboard={
+inline_keyboard:[
+[
+{text:"⬅️",callback_data:`pin_prev|${chatId}|${index}`},
+{text:`${index+1}/${pinData.results.length}`,callback_data:"noop"},
+{text:"➡️",callback_data:`pin_next|${chatId}|${index}`}
 ]
 ]
 };
-await bot.editMessageCaption(caption, {
-chat_id: chatId,
-message_id: messageId,
+await bot.editMessageMedia({
+type:"photo",
+media:item.imageUrl,
+parse_mode:"Markdown",
+caption:`<blockquote>┏━⬣ ✧「 PINTEREST DOWNLOADER 」✧
+┃ ✧ Image ${index+1} dari ${pinData.results.length}
+┃ ✧ Gunakan tombol untuk navigasi
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`},
+{
+chat_id:chatId,
+message_id:messageId,
+reply_markup:inlineKeyboard});
+pinData.index=index;
+bot.answerCallbackQuery(callbackQuery.id);}catch(err){
+console.error("❌ Callback Error:",err.message);
+bot.answerCallbackQuery(callbackQuery.id,{text:"⚠️ Gagal memuat gambar."});}}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💰 CALLBACK UNTUK PEMBAYARAN & TRANSAKSI
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data.startsWith('Status_')){
+const orderId=data.replace('Status_','');
+const statusData=await checkPaymentStatus(orderId);
+let statusText='MENUNGGU';
+if(statusData&&statusData.transaction){
+const status=(statusData.transaction.status||'').toString().toUpperCase();
+if(status.includes('SUCCESS')||status.includes('COMPLETED')||status.includes('PAID')){
+statusText='✅ BERHASIL';}else if(status.includes('FAILED')||status.includes('EXPIRED')||status.includes('CANCELLED')){
+statusText='❌ GAGAL';}}
+await bot.answerCallbackQuery(callbackQuery.id,{
+text:`Status: ${statusText}`,
+show_alert:true});}
+else if(data.startsWith('copy_')){
+const orderId=data.replace('copy_','');
+const transactions=loadTransactions();
+const transaction=transactions[orderId];
+if(transaction){
+const copyText=`Username: ${transaction.username}\nPassword: ${transaction.password}\nEmail: ${transaction.email}\nPanel: ${transaction.panelType}\nOrder ID: ${orderId}`;
+await bot.answerCallbackQuery(callbackQuery.id,{
+text:'Data disalin ke clipboard!',
+show_alert:true});}}
+else if(data.startsWith('cancel_')){
+const orderId=data.replace('cancel_','');
+if(global.pollingIntervals&&global.pollingIntervals[orderId]){
+const pollingData=global.pollingIntervals[orderId];
+if(pollingData.interval){
+clearInterval(pollingData.interval);
+pollingData.isCancelled=true;}
+delete global.pollingIntervals[orderId];}
+const transactions=loadTransactions();
+if(transactions[orderId]){
+transactions[orderId].status='cancelled';
+transactions[orderId].cancelledAt=new Date().toISOString();
+saveTransactions(transactions);}
+try{
+await bot.editMessageCaption(
+`<blockquote>┏━⬣ ✧「 PEMBAYARAN DIBATALKAN 」✧
+┃ ✧ Pembayaran telah dibatalkan oleh pengguna.
+┃ ✧ Order ID: <code>${orderId}</code>
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+Silakan mulai ulang jika ingin melanjutkan.`,
+{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'🔄 Buat Pesanan Baru',callback_data:'createpanel'}
+]
+]
+}});}catch(error){
+console.error('Error updating cancelled message:',error);
+logError('CANCEL_CALLBACK_ERROR',`Order: ${orderId}, Error: ${error.message}`,userId,username);}
+setTimeout(()=>{
+bot.deleteMessage(chatId,messageId).catch(()=>{});},5000);
+await bot.answerCallbackQuery(callbackQuery.id,{ 
+text:'✅ Pembayaran berhasil dibatalkan! Foto QR akan dihapus otomatis.', 
+show_alert:false});}
+else if(data.startsWith('status_')){
+const orderId=data.replace('status_','');
+const transactions=loadTransactions();
+const transaction=transactions[orderId];
+if(transaction){
+const statusMap={
+'pending':'⏳ Menunggu Pembayaran',
+'completed':'✅ Berhasil',
+'failed':'❌ Gagal',
+'timeout':'⏰ Timeout',
+'cancelled':'⛔ Dibatalkan'};
+const status=statusMap[transaction.status]||'❓ Tidak Diketahui';
+await bot.answerCallbackQuery(callbackQuery.id,{
+text:`Status: ${status}`,
+show_alert:true});}else{
+await bot.answerCallbackQuery(callbackQuery.id,{
+text:'Transaksi tidak ditemukan!',
+show_alert:true});}}
+else if(data.startsWith('cancel_seller_')){
+const orderId=data.replace('cancel_seller_','');
+if(global.pollingIntervals&&global.pollingIntervals[orderId]){
+const pollingData=global.pollingIntervals[orderId];
+if(pollingData.interval){
+clearInterval(pollingData.interval);
+pollingData.isCancelled=true;}
+delete global.pollingIntervals[orderId];}
+const transactions=loadTransactions();
+if(transactions[orderId]){
+transactions[orderId].status='cancelled';
+saveTransactions(transactions);}
+try{
+await bot.editMessageCaption(
+`<blockquote>┏━⬣ ✧「 SELLER UPGRADE DIBATALKAN 」✧
+┃ ✧ Upgrade seller telah dibatalkan.
+┃ ✧ Order ID: <code>${orderId}</code>
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+Ketik /addseller untuk mencoba lagi`,
+{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML'});}catch(error){
+console.error('Error updating cancelled seller message:',error);
+logError('SELLER_CALLBACK_ERROR',`Order: ${orderId}, Error: ${error.message}`,userId,username);}
+setTimeout(()=>{
+bot.deleteMessage(chatId,messageId).catch(()=>{});},5000);
+await bot.answerCallbackQuery(callbackQuery.id,{ 
+text:'✅ Seller upgrade dibatalkan! Foto QR akan dihapus otomatis.', 
+show_alert:false});}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📼 HDVID COMMAND - ENHANCE VIDEO QUALITY
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/hdvid$/, async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = '/hdvid';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!msg.reply_to_message || !msg.reply_to_message.video) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Reply video dengan:</b> <code>/hdvid</code>\n\n` +
+`<i>Balas video yang ingin ditingkatkan kualitasnya.</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+try {
+const video = msg.reply_to_message.video;
+const fileId = video.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Mengambil video dari Telegram...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const videoUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(videoUrl);
+const apiUrl = `https://api-faa.my.id/faa/hdvid?url=${encodedUrl}`;
+await bot.editMessageText(
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Mengirim data ke server...</i>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+const response = await axios.get(apiUrl, { 
+timeout: 0,
+headers: {
+'User-Agent': 'Mozilla/5.0',
+'Accept': 'application/json',
+'Cache-Control': 'no-cache'
+}
+});
+const apiData = response.data;
+await bot.editMessageText(
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Memproses data di server...</i>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+if (!apiData.status || !apiData.result || !apiData.result.download_url) {
+throw new Error('Server tidak mengembalikan video yang ditingkatkan');
+}
+const enhancedVideoUrl = apiData.result.download_url;
+await bot.editMessageText(
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Mengunduh video hasil...</i>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+const videoResponse = await axios.get(enhancedVideoUrl, { 
+responseType: 'arraybuffer', 
+timeout: 0
+});
+const videoBuffer = Buffer.from(videoResponse.data);
+await bot.sendVideo(chatId, videoBuffer, {
+caption: `<blockquote>🎬 Video Enhanced!</blockquote>\n` +
+`<i>Kualitas video berhasil ditingkatkan ke HD.</i>`,
 parse_mode: 'HTML',
-reply_markup: buttons
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+console.error('HDVid error:', error);
+let errorMessage = '';
+if (error.response?.status === 524 || error.message?.includes('524')) {
+errorMessage = `<blockquote>⏰ Server Timeout</blockquote>\n` +
+`<b>Kode Error: 524</b>\n` +
+`<i>Server sedang sangat sibuk atau proses enhancement memakan waktu terlalu lama.</i>\n\n` +
+`<b>Solusi:</b>\n` +
+`1. Server masih memproses data, tunggu beberapa saat\n` +
+`2. Coba lagi nanti ketika server tidak terlalu sibuk\n` +
+`3. Proses enhancement video bisa memakan waktu beberapa menit`;
+} else if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ Server sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout - Server Sibuk</blockquote>\n` +
+`<i>Server sedang memproses data Anda, tunggu beberapa saat dan coba lagi.</i>`;
+} else if (error.message?.includes('tidak mengembalikan video')) {
+errorMessage = `<blockquote>❌ Gagal meningkatkan kualitas video</blockquote>\n` +
+`<i>Server tidak merespon dengan benar. Coba lagi nanti.</i>`;
+} else if (error.code === 'ECONNABORTED') {
+errorMessage = `<blockquote>🔌 Koneksi terputus</blockquote>\n` +
+`<i>Koneksi ke server terputus, tetapi proses mungkin masih berjalan di server.</i>\n` +
+`<i>Coba lagi dalam beberapa menit.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses video</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📼 HANDLER UNTUK VIDEO DENGAN CAPTION /HDVID
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('video', async (msg) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+if (msg.caption && msg.caption.trim() === '/hdvid') {
+const messageText = 'VIDEO_CAPTION: /hdvid';
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const fileId = msg.video.file_id;
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Mengambil video dari Telegram...</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const file = await bot.getFile(fileId);
+const filePath = file.file_path;
+const videoUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_TOKEN}/${filePath}`;
+const encodedUrl = encodeURIComponent(videoUrl);
+const apiUrl = `https://api-faa.my.id/faa/hdvid?url=${encodedUrl}`;
+await bot.editMessageText(
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Mengirim data ke server...</i>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+const response = await axios.get(apiUrl, { 
+timeout: 0,
+headers: {
+'User-Agent': 'Mozilla/5.0',
+'Accept': 'application/json',
+'Cache-Control': 'no-cache'
+}
+});
+const apiData = response.data;
+await bot.editMessageText(
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Memproses data di server...</i>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+if (!apiData.status || !apiData.result || !apiData.result.download_url) {
+throw new Error('Server tidak mengembalikan video yang ditingkatkan');
+}
+const enhancedVideoUrl = apiData.result.download_url;
+await bot.editMessageText(
+`<blockquote>🔄 Meningkatkan kualitas video...</blockquote>\n` +
+`<i>Proses ini membutuhkan waktu sekitar 15-30 detik.</i>\n` +
+`<i>Status: Mengunduh video hasil...</i>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: 'HTML' }
+);
+const videoResponse = await axios.get(enhancedVideoUrl, { 
+responseType: 'arraybuffer', 
+timeout: 0
+});
+const videoBuffer = Buffer.from(videoResponse.data);
+await bot.sendVideo(chatId, videoBuffer, {
+caption: `<blockquote>🎬 Video Enhanced!</blockquote>\n` +
+`<i>Kualitas video berhasil ditingkatkan ke HD.</i>`,
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+console.error('HDVid caption error:', error);
+let errorMessage = '';
+if (error.response?.status === 524 || error.message?.includes('524')) {
+errorMessage = `<blockquote>⏰ Server Timeout</blockquote>\n` +
+`<b>Kode Error: 524</b>\n` +
+`<i>Server sedang sangat sibuk atau proses enhancement memakan waktu terlalu lama.</i>\n\n` +
+`<b>Solusi:</b>\n` +
+`1. Server masih memproses data, tunggu beberapa saat\n` +
+`2. Coba lagi nanti ketika server tidak terlalu sibuk\n` +
+`3. Proses enhancement video bisa memakan waktu beberapa menit`;
+} else if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ Server sedang maintenance</blockquote>\n` +
+`<i>Tunggu beberapa saat untuk mencoba kembali.</i>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout - Server Sibuk</blockquote>\n` +
+`<i>Server sedang memproses data Anda, tunggu beberapa saat dan coba lagi.</i>`;
+} else if (error.message?.includes('tidak mengembalikan video')) {
+errorMessage = `<blockquote>❌ Gagal meningkatkan kualitas video</blockquote>\n` +
+`<i>Server tidak merespon dengan benar. Coba lagi nanti.</i>`;
+} else if (error.code === 'ECONNABORTED') {
+errorMessage = `<blockquote>🔌 Koneksi terputus</blockquote>\n` +
+`<i>Koneksi ke server terputus, tetapi proses mungkin masih berjalan di server.</i>\n` +
+`<i>Coba lagi dalam beberapa menit.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses video</blockquote>\n` +
+`<code>${escapeHTML(error.message || 'Unknown error')}</code>`;
+}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📦 WEB2ZIP - DOWNLOAD WEBSITE AS ZIP
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/web2zip(?:\s+(.+))?$/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = `/web2zip ${match[1] || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+const url = match[1];
+if (!url) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<code>/web2zip https://example.com</code>`,
+{ parse_mode: "HTML" }
+);
+}
+if (!url.startsWith('http://') && !url.startsWith('https://')) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ URL tidak valid!</blockquote>`,
+{ parse_mode: "HTML" }
+);
+}
+try {
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>📦 Memproses website...</blockquote>`,
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+const encodedUrl = encodeURIComponent(url);
+const apiUrl = `https://api.enzoxavier.biz.id/api/web2zip?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { timeout: 0 });
+const data = response.data;
+if (!data.status || !data.downloadUrl) {
+throw new Error('API error');
+}
+await bot.editMessageText(
+`<blockquote>📦 Mengunduh ZIP...</blockquote>`,
+{ chat_id: chatId, message_id: processingMsg.message_id, parse_mode: "HTML" }
+);
+const zipResponse = await axios.get(data.downloadUrl, { 
+responseType: 'arraybuffer',
+timeout: 0
+});
+const zipBuffer = Buffer.from(zipResponse.data);
+const fileName = `${escapeHTML(config.BOT_NAME)}_${moment().tz('Asia/Jakarta').format('YYYY-MM-DD')}`;
+
+await bot.sendDocument(chatId, zipBuffer, {
+caption: `<blockquote>✅ Website ZIP siap!</blockquote>\n` +
+`<b>URL:</b> <code>${escapeHTML(data.originalUrl || url)}</code>\n` +
+`<b>File:</b> ${data.copiedFilesAmount || '?'}\n` +
+`<b>Size:</b> ${(zipBuffer.length / 1024 / 1024).toFixed(1)} MB`,
+parse_mode: "HTML",
+reply_to_message_id: msg.message_id
+}, {
+filename: fileName
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+console.error('Web2Zip error:', error.message);
+logError('WEB2ZIP_ERROR', `URL: ${url}, Error: ${error.message}`, userId, username);
+let errorMessage = '';
+if (error.response?.status === 404) {
+errorMessage = `<blockquote>❌ Website tidak ditemukan</blockquote>`;
+} else if (error.response?.status === 500) {
+errorMessage = `<blockquote>❌ Server error</blockquote>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>`;
+} else if (error.message?.includes('API error')) {
+errorMessage = `<blockquote>❌ Gagal membuat ZIP</blockquote>`;
+} else if (error.message?.includes('ENOTFOUND')) {
+errorMessage = `<blockquote>🌐 Domain error</blockquote>`;
+} else {
+errorMessage = `<blockquote>❌ Error sistem</blockquote>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: "HTML",
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌐 WEBSITE SCREENSHOT COMMAND - SUPER SIMPLE
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/ssweb(?:\s+(.+))?$/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = `/ssweb ${match[1] || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+const url = match[1];
+if (!url) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ Masukkan URL website!</blockquote>\nContoh: <code>/ssweb https://google.com</code>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+}
+if (!url.startsWith('http://') && !url.startsWith('https://')) {
+return bot.sendMessage(chatId,
+"<blockquote>❌ URL harus dimulai dengan http:// atau https://</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+}
+try {
+const processingMsg = await bot.sendMessage(chatId,
+"<blockquote>🌐 Mengambil screenshot...</blockquote>",
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+const encodedUrl = encodeURIComponent(url);
+const apiUrl = `https://api.resellergaming.my.id/tools/ssweb?url=${encodedUrl}`;
+const response = await axios.get(apiUrl, { timeout: 30000 });
+const data = response.data;
+if (!data.status || !data.result) {
+throw new Error('API tidak mengembalikan screenshot');
+}
+await bot.sendPhoto(chatId, data.result, {
+caption: `<blockquote>┏━⬣ ✧「 SCREENSHOT WEBSITE 」✧
+┃ ✧ URL: <code>${escapeHTML(url)}</code>
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+✅ Screenshot berhasil diambil!`,
+parse_mode: "HTML",
+reply_to_message_id: msg.message_id
+});
+await bot.deleteMessage(chatId, processingMsg.message_id);
+} catch (error) {
+console.error('SSWeb error:', error.message);
+logError('SSWEB_ERROR', `URL: ${url}, Error: ${error.message}`, userId, username);
+let errorMessage = '';
+if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
+errorMessage = "<blockquote>⏱️ Timeout - Server terlalu lama merespon</blockquote>\n💡 Coba beberapa saat lagi";
+} else if (error.response?.status === 404 || error.response?.status === 500) {
+errorMessage = "<blockquote>❌ Gagal mengambil screenshot</blockquote>\n💡 Coba URL lain atau coba nanti";
+} else if (error.message.includes('API tidak mengembalikan')) {
+errorMessage = "<blockquote>❌ API tidak merespon dengan benar</blockquote>";
+} else {
+errorMessage = "<blockquote>❌ Error sistem</blockquote>";
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: "HTML",
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📱 REACT CHANNEL WHATSAPP
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/react (.+)$/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const messageText = msg.text;
+logUserInteraction(userId, username, chatType, messageText, groupName);
+try {
+const params = match[1].trim();
+if (!params) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<code>/react https://whatsapp.com/channel/...|👍💪😻</code>\n` +
+`<i>Minimal 3 emoji</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const parts = params.split('|');
+if (parts.length < 2) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Format salah!</blockquote>\n` +
+`<b>Gunakan:</b> URL|EMOJI`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const url = parts[0].trim();
+const emoji = parts.slice(1).join('|').trim();
+if (!url.startsWith('https://whatsapp.com/channel/') && 
+!url.startsWith('https://www.whatsapp.com/channel/')) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ URL tidak valid!</blockquote>\n` +
+`<i>Harus link channel WhatsApp</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const emojiCount = Array.from(emoji).filter(char => {
+const regex = /[\p{Emoji}]/u;
+return regex.test(char);
+}).length;
+if (emojiCount < 3) {
+return bot.sendMessage(chatId,
+`<blockquote>❌ Emoji tidak cukup!</blockquote>\n` +
+`<b>Minimal 3 emoji</b>\n` +
+`<i>Anda: ${emojiCount} emoji</i>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+}
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔄 Mengirim reaksi...</blockquote>`,
+{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+);
+const encodedUrl = encodeURIComponent(url);
+const encodedEmoji = encodeURIComponent(emoji);
+const apiUrl = `https://api-faa.my.id/faa/react-channel?url=${encodedUrl}&react=${encodedEmoji}`;
+const response = await axios.get(apiUrl, {
+timeout: 0,
+headers: {
+'User-Agent': 'Mozilla/5.0',
+'Accept': 'application/json'
+}
+});
+const apiData = response.data;
+if (!apiData.status) {
+throw new Error(apiData.message || 'Gagal mengirim reaksi');
+}
+await bot.editMessageText(
+`<blockquote>✅ Berhasil!</blockquote>\n` +
+`<b>Channel:</b> <code>${url}</code>\n` +
+`<b>Reaksi:</b> ${apiData.info?.reaction_used || emoji}\n` +
+`<b>Pesan:</b> ${apiData.message || 'Berhasil'}`,
+{ 
+chat_id: chatId, 
+message_id: processingMsg.message_id, 
+parse_mode: 'HTML' 
 });
 } catch (error) {
-console.error('Error in back menu:', error);
+console.error('React error:', error);
+let errorMessage = '';
+if (error.response?.status === 404) {
+errorMessage = `<blockquote>❌ Channel tidak ditemukan!</blockquote>`;
+} else if (error.response?.status === 400) {
+errorMessage = `<blockquote>❌ Permintaan tidak valid!</blockquote>`;
+} else if (error.response?.status === 500) {
+errorMessage = `<blockquote>⚠️ Server maintenance</blockquote>`;
+} else if (error.message?.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout - Server sibuk</blockquote>`;
+} else if (error.code === 'ECONNREFUSED') {
+errorMessage = `<blockquote>🔌 Server tidak merespon!</blockquote>`;
+} else if (error.message?.includes('Gagal mengirim reaksi')) {
+errorMessage = `<blockquote>❌ Gagal!</blockquote><i>${error.message}</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error</blockquote><code>${escapeHTML(error.message || 'Unknown error')}</code>`;
 }
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: 'HTML',
+reply_to_message_id: msg.message_id
+});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🎵 MUSIC PLAYER COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/play(?:\s+(.+))?$/, async (msg, match) => {
+const chatId = msg.chat.id;
+const userId = msg.from.id.toString();
+const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+const chatType = msg.chat.type;
+const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+const query = match[1];
+const messageText = `/play ${query || ''}`.trim();
+logUserInteraction(userId, username, chatType, messageText, groupName);
+if (!query) {
+return bot.sendMessage(chatId,
+`<blockquote>🎵 Music Player</blockquote>\n\n` +
+`<b>Contoh penggunaan:</b>\n` +
+`<code>/play melepasmu</code>\n` +
+`<code>/play alan walker faded</code>\n` +
+`<code>/play coldplay paradise</code>\n\n` +
+`<i>Masukkan judul lagu yang ingin dicari.</i>`,
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+}
+const processingMsg = await bot.sendMessage(chatId,
+`<blockquote>🔍 Mencari lagu...</blockquote>\n` +
+`<i>Mencari: <b>${query}</b></i>`,
+{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
+);
+try {
+const encodedQuery = encodeURIComponent(query);
+const apiUrl = `https://api-faa.my.id/faa/ytplay?query=${encodedQuery}`;
+const response = await axios.get(apiUrl, {
+timeout: 30000,
+headers: {
+'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+'Accept': 'application/json'
+}
+});
+const data = response.data;
+if (!data.status || !data.result || !data.result.mp3) {
+throw new Error('Lagu tidak ditemukan');
+}
+const result = data.result;
+await bot.editMessageText(
+`<blockquote>⬇️ Mengunduh audio...</blockquote>\n` +
+`<i>Judul: <b>${result.title}</b></i>`,
+{
+chat_id: chatId,
+message_id: processingMsg.message_id,
+parse_mode: "HTML"
+}
+);
+const audioResponse = await axios({
+method: 'GET',
+url: result.mp3,
+responseType: 'arraybuffer',
+timeout: 60000,
+maxContentLength: 50 * 1024 * 1024
+});
+const audioBuffer = Buffer.from(audioResponse.data);
+let thumbBuffer = null;
+try {
+if (result.thumbnail) {
+const thumbResponse = await axios.get(result.thumbnail, { 
+responseType: 'arraybuffer', 
+timeout: 15000 
+});
+thumbBuffer = Buffer.from(thumbResponse.data);
+}
+} catch (thumbError) {
+console.log('Gagal mengunduh thumbnail:', thumbError.message);
+}
+const formatDuration = (seconds) => {
+const mins = Math.floor(seconds / 60);
+const secs = Math.floor(seconds % 60);
+return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+const formatViews = (views) => {
+if (!views) return '0';
+if (views >= 1000000) return (views / 1000000).toFixed(1) + 'M';
+if (views >= 1000) return (views / 1000).toFixed(1) + 'K';
+return views.toString();
+};
+const durationFormatted = formatDuration(result.duration || 0);
+const viewsFormatted = formatViews(result.views || 0);
+await bot.deleteMessage(chatId, processingMsg.message_id);
+if (thumbBuffer && thumbBuffer.length > 0) {
+const caption = `<blockquote>🎵 ${result.title}</blockquote>\n` +
+`<b>🎤 Artis:</b> ${result.author || 'Unknown'}\n` +
+`<b>⏱️ Durasi:</b> ${durationFormatted}\n` +
+`<b>👁️ Views:</b> ${viewsFormatted}\n` +
+`<b>📅 Published:</b> ${result.published || 'Unknown'}\n\n` +
+`<i>Download audio di bawah...</i>`;
+await bot.sendPhoto(chatId, thumbBuffer, {
+caption: caption,
+parse_mode: "HTML"
+});
+}
+const audioOptions = {
+title: result.title.substring(0, 64),
+performer: result.author ? result.author.substring(0, 64) : 'Unknown',
+reply_to_message_id: msg.message_id
+};
+await bot.sendAudio(chatId, audioBuffer, audioOptions);
+} catch (error) {
+console.error('Music Player Error:', error.message);
+let errorMessage = '';
+if (error.message.includes('Lagu tidak ditemukan')) {
+errorMessage = `<blockquote>❌ Lagu tidak ditemukan</blockquote>\n` +
+`<i>Coba dengan judul lagu yang berbeda.</i>`;
+} else if (error.response?.status === 404) {
+errorMessage = `<blockquote>❌ Lagu tidak ditemukan</blockquote>\n` +
+`<i>Pastikan judul lagu benar.</i>`;
+} else if (error.message.includes('timeout')) {
+errorMessage = `<blockquote>⏰ Timeout</blockquote>\n` +
+`<i>Proses terlalu lama. Coba lagi.</i>`;
+} else if (error.message.includes('ENOTFOUND') || error.message.includes('ECONNREFUSED')) {
+errorMessage = `<blockquote>❌ Server tidak dapat diakses</blockquote>\n` +
+`<i>Coba lagi beberapa menit kemudian.</i>`;
+} else {
+errorMessage = `<blockquote>❌ Error memproses lagu</blockquote>\n` +
+`<code>${escapeHTML(error.message?.substring(0, 80) || 'Unknown error')}</code>`;
+}
+try {
+await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
+} catch (e) {}
+await bot.sendMessage(chatId, errorMessage, {
+parse_mode: "HTML",
+reply_to_message_id: msg.message_id
+});
 }
 });
 
@@ -2815,15 +3844,12 @@ const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.t
 const text = match[1];
 const messageText = `/tts ${text || ''}`.trim();
 logUserInteraction(userId, username, chatType, messageText, groupName);
-
-// Handle reply to message
 let inputText = '';
 if (msg.reply_to_message && msg.reply_to_message.text) {
 inputText = msg.reply_to_message.text.trim();
 } else if (text) {
 inputText = text.trim();
 }
-
 if (!inputText) {
 return bot.sendMessage(chatId,
 `<blockquote>❌ Format salah!</blockquote>\n\n` +
@@ -2832,7 +3858,6 @@ return bot.sendMessage(chatId,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 }
-
 if (inputText.length > 500) {
 return bot.sendMessage(chatId,
 `<blockquote>❌ Teks terlalu panjang!</blockquote>\n\n` +
@@ -2842,7 +3867,6 @@ return bot.sendMessage(chatId,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 }
-
 const processingMsg = await bot.sendMessage(chatId,
 `<blockquote>🔊 Membuat TTS Audio...</blockquote>\n\n` +
 `<b>Teks:</b> ${escapeHTML(inputText.substring(0, 100))}${inputText.length > 100 ? '...' : ''}\n` +
@@ -2850,7 +3874,6 @@ const processingMsg = await bot.sendMessage(chatId,
 `<i>Mohon tunggu...</i>`,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
-
 try {
 const encodedText = encodeURIComponent(inputText);
 const apiUrl = `https://exsalapi.my.id/api/audio/tiktok-tts?text=${encodedText}&voice=id_001&apikey=${AI_API_KEY}`;
@@ -2874,15 +3897,11 @@ console.log('TTS API Response:', JSON.stringify(data, null, 2));
 if (!response.ok || !data || data.status === false || !data.data || !data.data.url) {
 throw new Error(data.message || `HTTP ${response.status}: ${responseText.substring(0, 100)}`);
 }
-
-// Simpan audio ke buffer terlebih dahulu
 const audioResponse = await fetch(data.data.url);
 if (!audioResponse.ok) {
 throw new Error(`Gagal mengunduh audio: ${audioResponse.status}`);
 }
 const audioBuffer = await audioResponse.arrayBuffer();
-
-// Buat keyboard dengan Indonesia sebagai suara aktif (✅)
 const keyboard = {
 inline_keyboard: [
 [
@@ -2898,8 +3917,6 @@ inline_keyboard: [
 ]
 ]
 };
-
-// Kirim audio sebagai buffer
 const sentMessage = await bot.sendAudio(chatId, Buffer.from(audioBuffer), {
 caption: `<blockquote>🔊 TTS Audio Selesai!</blockquote>\n\n` +
 `<b>Teks:</b> ${escapeHTML(inputText.substring(0, 100))}${inputText.length > 100 ? '...' : ''}\n` +
@@ -2910,8 +3927,6 @@ parse_mode: 'HTML',
 reply_markup: keyboard,
 reply_to_message_id: msg.message_id
 });
-
-// Simpan informasi di cache untuk callback handler
 if (!global.ttsCache) global.ttsCache = {};
 const cacheKey = `tts_${sentMessage.message_id}`;
 global.ttsCache[cacheKey] = {
@@ -2919,9 +3934,7 @@ text: inputText,
 messageId: sentMessage.message_id,
 chatId: chatId
 };
-
 await bot.deleteMessage(chatId, processingMsg.message_id);
-
 } catch (error) {
 console.error('TTS error:', error);
 let errorMessage = '';
@@ -2960,7 +3973,7 @@ await bot.sendMessage(chatId, errorMessage, { parse_mode: 'HTML', reply_to_messa
 });
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🤖 AI KASIR ON/OFF COMMAND
+// 🎀 AI KASIR ON/OFF COMMAND
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.onText(/^\/ai(?:\s+(on|off))?$/i, async (msg, match) => {
 const chatId = msg.chat.id;
@@ -2972,46 +3985,35 @@ const action = match[1] ? match[1].toLowerCase() : null;
 const messageText = `/ai ${action || ''}`.trim();
 logUserInteraction(userId, username, chatType, messageText, groupName);
 if (!isAdmin(userId)) {
-return bot.sendMessage(chatId, 
-`<blockquote>❌ Hanya admin yang bisa mengontrol AI!</blockquote>`,
+const caption = `<blockquote>⚠️ Akses Ditolak</blockquote>
+Maaf~ cuma admin yang bisa kontrol AI nih! 😅`;
+return bot.sendMessage(chatId, caption,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 }
 if (!action) {
-const currentStatus = isAIEnabled() ? 'AKTIF' : 'NONAKTIF';
-return bot.sendMessage(chatId,
-`<blockquote>🤖 STATUS AI KASIR</blockquote>\n\n` +
-`Status saat ini: <b>${currentStatus}</b>\n\n` +
-`<b>Penggunaan:</b>\n` +
-`<code>/ai on</code> - Aktifkan AI Kasir\n` +
-`<code>/ai off</code> - Nonaktifkan AI Kasir`,
+const currentStatus = isAIEnabled() ? 'AKTIF ✨' : 'NONAKTIF 😴';
+const caption = `<blockquote>🌸 Status AI</blockquote>
+<b>Status:</b> ${currentStatus}
+
+<code>/ai on</code> - Nyalain AI
+<code>/ai off</code> - Matiin AI`;
+return bot.sendMessage(chatId, caption,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 }
 if (action === 'on') {
 toggleAI(true);
-await bot.sendMessage(chatId,
-`<blockquote>✅ AI KASIR DIAKTIFKAN</blockquote>\n\n` +
-`Sistem AI kasir pribadi sekarang aktif!\n\n` +
-`Fitur:\n` +
-`• Akan merespon pesan non-command\n` +
-`• Ingatan interaksi per user\n` +
-`• Promosi panel untuk user baru\n` +
-`• Bantuan informasi produk`,
+const caption = `<blockquote>✅ AI Diaktifkan</blockquote>
+${escapeHTML(config.BOT_NAME)} sekarang aktif dan siap bantu! 🤗`;
+await bot.sendMessage(chatId, caption,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
-const ownerMsg = `<blockquote>🤖 AI KASIR DIAKTIFKAN</blockquote>\n\n` +
-`<b>Oleh:</b> ${escapeHTML(username)}\n` +
-`<b>User ID:</b> <code>${userId}</code>\n` +
-`<b>Waktu:</b> ${new Date().toLocaleString('id-ID')}\n\n` +
-`<i>AI sekarang aktif dan siap melayani!</i>`;
-await bot.sendMessage(config.OWNER_ID, ownerMsg, { parse_mode: 'HTML' });
 } else if (action === 'off') {
 toggleAI(false);
-await bot.sendMessage(chatId,
-`<blockquote>⏸️ AI KASIR DINONAKTIFKAN</blockquote>\n\n` +
-`Sistem AI kasir pribadi sekarang nonaktif.\n` +
-`Tidak akan merespon pesan user.`,
+const caption = `<blockquote>⏸️ AI Dimatikan</blockquote>
+${escapeHTML(config.BOT_NAME)} sekarang istirahat~ 💤`;
+await bot.sendMessage(chatId, caption,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 }
@@ -3029,27 +4031,48 @@ const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.t
 const messageText = '/aimemory';
 logUserInteraction(userId, username, chatType, messageText, groupName);
 if (!isAdmin(userId)) {
-return bot.sendMessage(chatId,
-`<blockquote>❌ Hanya admin yang bisa!</blockquote>`,
+const caption = `<blockquote>🚫 Akses Dibatasi</blockquote>
+
+Hmm.. cuma admin yang boleh liat memory ${escapeHTML(config.BOT_NAME)} nih! 😅
+
+<blockquote><b>👤 User :</b> ${escapeHTML(username)}
+<b>📅 Tanggal :</b> ${escapeHTML(tanggalLengkap)}
+<b>⏰ Jam :</b> ${escapeHTML(jamLengkap)}</blockquote>
+Minta ijin admin dulu yaa! 💕`;
+return bot.sendMessage(chatId, caption,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
 }
 const otakai = loadOtakai();
 const userCount = Object.keys(otakai.users).length;
-const aiStatus = otakai.ai_enabled ? 'AKTIF' : 'NONAKTIF';
-let memoryInfo = `<blockquote>🤖 AI MEMORY STATUS</blockquote>\n\n`;
-memoryInfo += `<b>Status AI:</b> ${aiStatus}\n`;
-memoryInfo += `<b>Total Users:</b> ${userCount}\n\n`;
+const aiStatus = otakai.ai_enabled ? 'AKTIF ✨' : 'NONAKTIF 💤';
+let memoryInfo = `<blockquote>🧠 MEMORY ${escapeHTML(config.BOT_NAME).toUpperCase()}</blockquote>
+
+Hai admin! Ini data memory aku nih~ 🤗
+
+<blockquote><b>🌸 Status :</b> ${aiStatus}
+<b>👥 Total User :</b> ${userCount} orang</blockquote>`;
 const recentUsers = Object.entries(otakai.users)
 .sort((a, b) => new Date(b[1].last_interaction) - new Date(a[1].last_interaction))
 .slice(0, 10);
-memoryInfo += `<b>📊 User Terakhir Berinteraksi:</b>\n`;
+memoryInfo += `<blockquote>📈 USER TERAKHIR CHAT:</blockquote>`;
 recentUsers.forEach(([id, data], index) => {
 const lastSeen = new Date(data.last_interaction).toLocaleString('id-ID');
-memoryInfo += `${index + 1}. ID: <code>${id}</code>\n`;
-memoryInfo += `   Pesan: ${data.message_count || 0}x\n`;
-memoryInfo += `   Terakhir: ${lastSeen}\n`;
+const daysAgo = Math.floor((new Date() - new Date(data.last_interaction)) / (1000 * 60 * 60 * 24));
+const daysText = daysAgo === 0 ? 'Hari ini' : `${daysAgo} hari lalu`;
+const emoji = index < 3 ? '🥇🥈🥉'.split('')[index] : '👤';
+memoryInfo += `${emoji} <b>Rank ${index + 1}:</b>\n`;
+memoryInfo += `   🆔 ID: <code>${id}</code>\n`;
+memoryInfo += `   💬 Chat: ${data.message_count || 0}x\n`;
+memoryInfo += `   ⏳ Terakhir: ${daysText}\n`;
+memoryInfo += `   📅 ${lastSeen}\n\n`;
 });
+memoryInfo += `<blockquote><b>🤖 Bot :</b> ${escapeHTML(config.BOT_NAME)}
+<b>👤 Admin :</b> ${escapeHTML(username)}
+<b>📅 Tanggal :</b> ${escapeHTML(tanggalLengkap)}
+<b>⏰ Jam :</b> ${escapeHTML(jamLengkap)}</blockquote>
+
+<blockquote>💕 ${escapeHTML(config.BOT_NAME)} inget semua percakapan sama customer lho! ✨</blockquote>`;
 await bot.sendMessage(chatId, memoryInfo, { parse_mode: 'HTML', reply_to_message_id: msg.message_id });
 });
 
@@ -3063,7 +4086,7 @@ const chatId = msg.chat.id;
 const userId = msg.from.id.toString();
 const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
 const userMessage = msg.text.trim();
-if (userMessage.length < 2 || userMessage.length > 500) return;
+if (userMessage.length < 2 || userMessage.length > 200) return;
 if (msg.chat.type !== 'private') return;
 if (!isAIEnabled()) return;
 if (msg.from.is_bot) return;
@@ -3072,41 +4095,72 @@ await bot.sendChatAction(chatId, 'typing');
 try {
 const aiResult = await callAIChat(userId, userMessage);
 if (aiResult.success) {
-await bot.sendMessage(chatId, aiResult.response, {
+// Bersihkan respons AI dari karakter HTML yang bermasalah
+const cleanAIResponse = aiResult.response
+.replace(/</g, '&lt;')
+.replace(/>/g, '&gt;')
+.replace(/&/g, '&amp;')
+.replace(/"/g, '&quot;')
+.replace(/'/g, '&#39;');
+
+const caption = `<blockquote>🌸 こんにちは, ${escapeHTML(username)}-さん</blockquote>
+${cleanAIResponse}
+
+<blockquote>${escapeHTML(jamLengkap)} ⏰ | ${escapeHTML(tanggalLengkap)} 📅</blockquote>`;
+await bot.sendMessage(chatId, caption, {
 parse_mode: 'HTML',
 reply_to_message_id: msg.message_id
 });
+
 if (aiResult.isNewUser) {
 setTimeout(async () => {
-await bot.sendMessage(chatId,
-`<blockquote>🛒 INGIN MEMBELI PANEL?</blockquote>\n\n` +
-`Untuk membuat panel langsung, gunakan command:\n\n` +
-`<code>/unli username,id_telegram</code>\n` +
-`Contoh: <code>/unli johndoe,${userId}</code>\n\n` +
-`Atau paket lainnya:\n` +
-`<code>/1gb username,id</code>\n` +
-`<code>/seller username,id</code>\n\n` +
-`Pembayaran otomatis via QRIS!`,
-{ parse_mode: 'HTML' }
-);
+const promoCaption = `<blockquote>🛒 HAI! MAU BELI PANEL NIH~</blockquote>
+
+Yey! Kamu baru pertama kali chat sama ${escapeHTML(config.BOT_NAME)} ya! 🤗
+Mau coba beli panel atau jadi reseller? 💖
+
+Coba deh ketik salah satu:
+<code>/unli username,id_telegram</code>
+Contoh: <code>/unli ${escapeHTML(username)},${userId}</code>
+
+Atau paket lainnya:
+<code>/1gb username,id</code>
+<code>/addseller id_kamu</code>
+
+<blockquote>🌸 Catatan: Kita baru kenal hari ini! Semoga jadi langganan ya~</blockquote>`;
+
+await bot.sendMessage(chatId, promoCaption, { 
+parse_mode: 'HTML' 
+});
 }, 1000);
 }
 } else {
-await bot.sendMessage(chatId,
-`<blockquote>⚠️ Maaf, AI sedang sibuk</blockquote>\n\n` +
-`Coba lagi nanti atau gunakan command langsung:\n` +
-`<code>/menu</code> untuk melihat menu`,
-{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
-);
+const errorCaption = `<blockquote>⚠️ Oops! ${escapeHTML(config.BOT_NAME)} lagi ada masalah nih...</blockquote>
+
+Aduh maaf ya, aku lagi error dikit 😢
+Coba lagi nanti atau langsung pake command aja yaa!
+
+<blockquote><b>🤖 Bot :</b> ${escapeHTML(config.BOT_NAME)}</blockquote>`;
+
+await bot.sendMessage(chatId, errorCaption, {
+parse_mode: 'HTML', 
+reply_to_message_id: msg.message_id 
+});
 }
 } catch (error) {
 console.error('AI handler error:', error);
-await bot.sendMessage(chatId,
-`<blockquote>❌ Gagal memproses pesan</blockquote>\n\n` +
-`Silakan coba lagi atau hubungi admin.\n` +
-`Error: <code>${escapeHTML(error.message.substring(0, 100))}</code>`,
-{ parse_mode: 'HTML', reply_to_message_id: msg.message_id }
-);
+const errorCaption = `<blockquote>❌ Wah, ${escapeHTML(config.BOT_NAME)} gagal nih...</blockquote>
+
+Aduh maaf banget ya, ada error nih 😭
+Tunggu bentar yaa, atau coba kontak ownernya!
+
+<blockquote><b>Error :</b> ${escapeHTML(error.message.substring(0, 100))}
+<b>🤖 Bot :</b> ${escapeHTML(config.BOT_NAME)}</blockquote>`;
+
+await bot.sendMessage(chatId, errorCaption, {
+parse_mode: 'HTML', 
+reply_to_message_id: msg.message_id 
+});
 }
 });
 
@@ -4141,7 +5195,7 @@ try {
 const photo = msg.reply_to_message.photo[msg.reply_to_message.photo.length - 1];
 const fileId = photo.file_id;
 const processingMsg = await bot.sendMessage(chatId,
-`<blockquote>🔄 Memproses foto...</blockquote>\n` +
+`<blockquote>?? Memproses foto...</blockquote>\n` +
 `<i>Mengaplikasikan filter gaya Ghibli...</i>`,
 { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
 );
@@ -5676,80 +6730,6 @@ bot.sendMessage(chatId, "<blockquote>❌ Error sistem!</blockquote>\n\nSilakan c
 });
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🌐 WEBSITE SCREENSHOT COMMAND
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-bot.onText(/^\/ssweb(?:\s+(.+))?$/, async (msg, match) => {
-const chatId = msg.chat.id;
-const userId = msg.from.id.toString();
-const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
-const chatType = msg.chat.type;
-const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
-const messageText = `/ssweb ${match[1] || ''}`.trim();
-logUserInteraction(userId, username, chatType, messageText, groupName);
-const url = match[1];
-if (!url) {
-return bot.sendMessage(chatId,
-"<blockquote>❌ Masukkan URL website!</blockquote>\nContoh: <code>/ssweb https://google.com</code>",
-{ parse_mode: "HTML" }
-);
-}
-if (!url.startsWith('http://') && !url.startsWith('https://')) {
-return bot.sendMessage(chatId,
-"<blockquote>❌ URL harus dimulai dengan http:// atau https://</blockquote>",
-{ parse_mode: "HTML" }
-);
-}
-try {
-const processingMsg = await bot.sendMessage(chatId,
-"<blockquote>🌐 Mengambil screenshot...</blockquote>",
-{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
-);
-const encodedUrl = encodeURIComponent(url);
-const apiUrl = `https://api.jarroffc.my.id/tools/ssweb?apikey=jarroffc&url=${encodedUrl}`;
-const response = await axios.get(apiUrl);
-const data = response.data;
-if (!data.status || !data.result) {
-throw new Error('Gagal mengambil screenshot');
-}
-const screenshotUrl = data.result;
-const screenshotResponse = await axios.get(screenshotUrl, { responseType: 'arraybuffer' });
-const buffer = Buffer.from(screenshotResponse.data);
-await bot.sendPhoto(chatId, buffer, {
-caption: `<blockquote>✅ Screenshot berhasil!</blockquote>
-<b>URL:</b> <code>${escapeHTML(url)}</code>
-<b>Sumber:</b> ${data.creator || 'Jarr Officiall'}`,
-parse_mode: "HTML",
-reply_to_message_id: msg.message_id
-});
-await bot.deleteMessage(chatId, processingMsg.message_id);
-} catch (error) {
-console.error('SSWeb error:', error.message);
-logError('SSWEB_ERROR', `URL: ${url}, Error: ${error.message}`, userId, username);
-if (error.response?.status === 404) {
-bot.sendMessage(chatId,
-"<blockquote>❌ Website tidak ditemukan</blockquote>",
-{ parse_mode: "HTML" }
-);
-} else if (error.message.includes('Gagal mengambil screenshot')) {
-bot.sendMessage(chatId,
-"<blockquote>❌ Gagal mengambil screenshot</blockquote>",
-{ parse_mode: "HTML" }
-);
-} else if (error.message.includes('timeout')) {
-bot.sendMessage(chatId,
-"<blockquote>❌ Timeout, coba lagi</blockquote>",
-{ parse_mode: "HTML" }
-);
-} else {
-bot.sendMessage(chatId,
-"<blockquote>❌ Error sistem</blockquote>",
-{ parse_mode: "HTML" }
-);
-}
-}
-});
-
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🖼️ HD IMAGE ENHANCER COMMAND
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 bot.onText(/^\/hd$/, async (msg) => {
@@ -6450,7 +7430,7 @@ const statusMessage = `<blockquote>💾 Backup Data</blockquote>\n\n` +
 `✅ <b>Status:</b> Backup berhasil dibuat!\n` +
 `📁 <b>File:</b> ${backupFileName}\n` +
 `📦 <b>Ukuran:</b> ${formattedSize}\n` +
-`📄 <b>Total file:</b> ${jsonFiles.length}\n` +
+`?? <b>Total file:</b> ${jsonFiles.length}\n` +
 `⏳ <b>Waktu:</b> ${new Date().toLocaleTimeString('id-ID', {hour12: false})}\n\n` +
 `<i>⏰ Pesan ini akan terhapus otomatis dalam 15 detik...</i>`;
 await bot.editMessageText(statusMessage, {
@@ -7357,175 +8337,6 @@ bot.sendMessage(chatId,
 { parse_mode: "HTML", reply_to_message_id: msg.message_id }
 );
 }
-}
-});
-
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🎵 MUSIC PLAYER COMMAND
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-bot.onText(/^\/play(?:\s+(.+))?$/, async (msg, match) => {
-const chatId = msg.chat.id;
-const userId = msg.from.id.toString();
-const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
-const chatType = msg.chat.type;
-const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
-const query = match[1];
-const messageText = `/play ${query || ''}`.trim();
-logUserInteraction(userId, username, chatType, messageText, groupName);
-if (!query) {
-const helpMessage = `<blockquote>┌─⧼ <b>🎵 MUSIC PLAYER</b> ⧽
-├ ⬡ Version : ${config.VERSI}
-├ ⬡ Owner : ${config.DEVCELOPER}
-├ ⬡ Language : JavaScript
-╰─────────────
-
-┌─⧼ <b>ɪɴꜱᴛʀᴜᴋꜱɪ</b> ⧽
-├ /play [judul_lagu]
-├ 
-┌─⧼ <b>ᴄᴏɴᴛᴏʜ</b> ⧽
-├ /play melepasmu
-├ /play alan walker faded
-├ /play coldplay paradise
-╰──────────────</blockquote>`;
-return bot.sendMessage(chatId, helpMessage, {
-parse_mode: "HTML",
-reply_to_message_id: msg.message_id
-});
-}
-const searchEmojis = ['🔍', '🎵', '🎶', '🎧', '🎤', '🎼', '📀', '💿', '📻'];
-const processingMsg = await bot.sendMessage(chatId, 
-`<blockquote>┌─⧼ <b>🎵 MUSIC PLAYER</b> ⧽
-├ ${searchEmojis[0]} Mencari: <b>${query}</b>
-├ ⏳ Mohon tunggu...
-╰──────────────</blockquote>`,
-{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
-);
-let emojiInterval;
-let currentEmojiIndex = 0;
-const startTime = Date.now();
-emojiInterval = setInterval(async () => {
-currentEmojiIndex = (currentEmojiIndex + 1) % searchEmojis.length;
-try {
-await bot.editMessageText(
-`<blockquote>┌─⧼ <b>🎵 MUSIC PLAYER</b> ⧽
-├ ${searchEmojis[currentEmojiIndex]} Mencari: <b>${query}</b>
-├ ⏳ Mohon tunggu...
-╰──────────────</blockquote>`,
-{
-chat_id: chatId,
-message_id: processingMsg.message_id,
-parse_mode: "HTML"
-}
-);
-} catch (error) {
-if (error.response && error.response.error_code === 400) {
-}
-}
-if (Date.now() - startTime >= 5000) {
-clearInterval(emojiInterval);
-}
-}, 1000);
-try {
-const encodedQuery = encodeURIComponent(query);
-const apiUrl = `https://api.vreden.my.id/api/v1/download/play/audio?query=${encodedQuery}`;
-const response = await axios.get(apiUrl, {
-timeout: 30000,
-headers: {
-'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36',
-'Accept': 'application/json'
-}
-});
-clearInterval(emojiInterval);
-const data = response.data;
-if (!data.status || !data.result || !data.result.download) {
-throw new Error('Lagu tidak ditemukan');
-}
-const metadata = data.result.metadata;
-const download = data.result.download;
-await bot.editMessageText(
-`<blockquote>┌─⧼ <b>🎵 MUSIC PLAYER</b> ⧽
-├ ✅ <b>${metadata.title}</b>
-├ 👤 ${metadata.author.name}
-├ ⏱️ ${metadata.timestamp}
-├ 📥 Mendownload...
-╰──────────────</blockquote>`,
-{
-chat_id: chatId,
-message_id: processingMsg.message_id,
-parse_mode: "HTML"
-}
-);
-const audioResponse = await axios({
-method: 'GET',
-url: download.url,
-responseType: 'stream',
-timeout: 60000
-});
-const chunks = [];
-for await (const chunk of audioResponse.data) {
-chunks.push(chunk);
-}
-const audioBuffer = Buffer.concat(chunks);
-await bot.deleteMessage(chatId, processingMsg.message_id);
-const successEmojis = ['🎉', '✅', '✨', '🌟', '💫', '🔥', '💖', '❤️'];
-const randomSuccessEmoji = successEmojis[Math.floor(Math.random() * successEmojis.length)];
-await bot.sendAudio(chatId, audioBuffer, {
-caption: `<blockquote>┌─⧼ <b>${randomSuccessEmoji} MUSIC PLAYER</b> ⧽
-├ 🎵 <b>${metadata.title}</b>
-├ 
-├ 👤 <b>Artist:</b> ${metadata.author.name}
-├ ⏱️ <b>Durasi:</b> ${metadata.timestamp}
-├ 🎶 <b>Kualitas:</b> ${download.quality}
-├ 🔍 <b>Pencarian:</b> ${query}
-╰──────────────
-<blockquote>┌─⧼ <b>INFO</b> ⧽
-├ <i>Nikmati musik dalam kegelapan</i>
-╰──────────────</blockquote></blockquote>`,
-parse_mode: "HTML",
-title: metadata.title.substring(0, 64),
-performer: metadata.author.name.substring(0, 64),
-reply_to_message_id: msg.message_id
-});
-} catch (error) {
-clearInterval(emojiInterval);
-console.log('Music Player Error:', error.message);
-if (processingMsg) {
-try {
-await bot.deleteMessage(chatId, processingMsg.message_id);
-} catch (deleteError) {
-console.log('Gagal menghapus pesan processing:', deleteError.message);
-}
-}
-const errorEmojis = ['❌', '⚠️', '🚫', '😢', '💔', '🔇'];
-const randomErrorEmoji = errorEmojis[Math.floor(Math.random() * errorEmojis.length)];
-let errorMessage = 'Gagal memproses permintaan musik';
-if (error.response) {
-if (error.response.status === 404) {
-errorMessage = 'Lagu tidak ditemukan di YouTube';
-} else if (error.response.status === 429) {
-errorMessage = 'Terlalu banyak request, coba lagi nanti';
-} else {
-errorMessage = `Error ${error.response.status}`;
-}
-} else if (error.code === 'ECONNABORTED') {
-errorMessage = 'Timeout: Proses terlalu lama';
-} else if (error.message.includes('tidak ditemukan')) {
-errorMessage = 'Lagu tidak ditemukan, coba judul lain';
-}
-await bot.sendMessage(chatId, 
-`<blockquote>┌─⧼ <b>${randomErrorEmoji} MUSIC ERROR</b> ⧽
-├ ${errorMessage}
-├ 
-├ 💡 <b>Tips:</b>
-├ • Gunakan judul yang lebih spesifik
-├ • Cek penulisan judul lagu
-├ • Tunggu beberapa detik lalu coba lagi
-╰──────────────</blockquote>`,
-{ 
-parse_mode: "HTML", 
-reply_to_message_id: msg.message_id
-}
-);
 }
 });
 
