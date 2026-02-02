@@ -15,6 +15,7 @@ const os = require('os');
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const config = require('./setting.js');
 const DATA_DIR = path.join(__dirname, 'lib');
+const PRODUCTS_FILE = path.join(DATA_DIR, 'products.json');
 const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
 const PAYMENTS_FILE = path.join(DATA_DIR, 'payments.json');
 const RESELLER_FILE = path.join(DATA_DIR, 'reseller.json');
@@ -30,13 +31,16 @@ const VERCEL_TOKEN = config.VERCEL;
 const GITHUB_URL = "https://novabot503.github.io/novabot";
 const GITHUB_RAW_URL = "https://novabot503.github.io/novabot";
 const UPDATE_FILES = ["Novabot.js", "package.json", "setting.js", "versi.json"];
-const AI_API_URL = "https://exsalapi.my.id/api/ai/text/gemini-2.5-flash";
+const AI_API_URL = "https://exsalapi.my.id/api/ai/text/gemini-2.5-flash-v2";
 const AI_API_KEY = "exs_novabot_07e7e456";
 
 // Di /start command:
 const waktuSumBarat = getWestSumatraTime();
 const tanggalLengkap = waktuSumBarat.date;
 const jamLengkap = waktuSumBarat.time;
+
+let addProductState = {};
+let tempMailSessions={};
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // ⚙️ ENVIRONMENT CONFIG - SUMATERA BARAT TIME
@@ -891,6 +895,117 @@ totalSellers: Object.keys(reseller).length,
 aiStatus: otakai.ai_enabled ? 'AKTIF' : 'NONAKTIF',
 aiMemoryUsers: Object.keys(otakai.users || {}).length
 };
+}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📦 PRODUCTS MANAGEMENT FUNCTIONS
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function loadProducts() {
+return loadJSON(PRODUCTS_FILE);
+}
+function saveProducts(data) {
+saveJSON(PRODUCTS_FILE, data);
+}
+function addProduct(name, price, data, description = "") {
+const products = loadProducts();
+const productId = 'PROD_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+products[productId] = {
+id: productId,
+name: name,
+price: parseInt(price),
+data: data,
+description: description || "",
+status: 'available',
+createdAt: new Date().toISOString(),
+soldCount: 0,
+purchases: []
+};
+saveProducts(products);
+return productId;
+}
+function deleteProduct(productId) {
+const products = loadProducts();
+if (products[productId]) {
+delete products[productId];
+saveProducts(products);
+return true;
+}
+return false;
+}
+function getProduct(productId) {
+const products = loadProducts();
+return products[productId] || null;
+}
+function getAvailableProducts() {
+const products = loadProducts();
+return Object.values(products).filter(p => p.status === 'available');
+}
+function getAllProducts() {
+const products = loadProducts();
+return Object.values(products);
+}
+function markProductAsSold(productId, buyerId, buyerUsername, orderId) {
+const products = loadProducts();
+if (products[productId]) {
+const product = products[productId];
+product.soldCount = (product.soldCount || 0) + 1;
+const purchaseRecord = {
+orderId: orderId,
+buyerId: buyerId,
+buyerUsername: buyerUsername || 'Unknown',
+purchaseDate: new Date().toISOString(),
+status: 'completed'
+};
+if (!product.purchases) {
+product.purchases = [];
+}
+product.purchases.push(purchaseRecord);
+saveProducts(products);
+return true;
+}
+return false;
+}
+function updateProductStatus(productId, newStatus) {
+const products = loadProducts();
+if (products[productId]) {
+products[productId].status = newStatus;
+saveProducts(products);
+return true;
+}
+return false;
+}
+function getProductPurchaseHistory(productId) {
+const product = getProduct(productId);
+if (product && product.purchases) {
+return product.purchases;
+}
+return [];
+}
+function getProductSalesStats(productId) {
+const product = getProduct(productId);
+if (!product) return null;
+return {
+totalSold: product.soldCount || 0,
+totalRevenue: (product.soldCount || 0) * product.price,
+lastPurchase: product.purchases && product.purchases.length > 0 
+? product.purchases[product.purchases.length - 1].purchaseDate 
+: null,
+purchaseCount: product.purchases ? product.purchases.length : 0
+};
+}
+function editProduct(productId, updates) {
+const products = loadProducts();
+if (products[productId]) {
+const allowedFields = ['name', 'price', 'data', 'description', 'status'];
+allowedFields.forEach(field => {
+if (updates[field] !== undefined) {
+products[productId][field] = updates[field];
+}
+});
+saveProducts(products);
+return true;
+}
+return false;
 }
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2143,6 +2258,153 @@ parse_mode: 'HTML'
 }
 }
 
+async function startProductPaymentPolling(orderId,chatId,userId,product,messageId){
+let attempts=0;
+const maxAttempts=120;
+let isCancelled=false;
+const pollingInterval=setInterval(async()=>{
+if(isCancelled){clearInterval(pollingInterval);return;}
+if(attempts>=maxAttempts){
+clearInterval(pollingInterval);
+const transactions=loadTransactions();
+if(transactions[orderId]){
+transactions[orderId].status='timeout';
+saveTransactions(transactions);}
+try{
+const timeoutKeyboard={
+inline_keyboard:[
+[
+{text:'🔄 Coba Lagi',callback_data:'beli_produk'},
+{text:'⿻ ᴄʜᴀᴛ ᴀᴅᴍɪɴ',url:config.URLADMIN}
+]
+]};
+await bot.editMessageCaption(`<blockquote>⏰ PEMBAYARAN TIMEOUT</blockquote>
+<blockquote>
+<b>Status :</b> ❌ GAGAL
+<b>Produk :</b> ${escapeHTML(product.name)}
+<b>Harga :</b> Rp ${product.price.toLocaleString()}
+<b>Order ID :</b> <code>${orderId}</code>
+<b>Waktu :</b> 10:00 menit
+<b>Progress :</b> [██████████] 100%
+</blockquote>
+Pembayaran tidak selesai dalam 10 menit.
+Silakan ulangi proses pembelian.`,
+{chat_id:chatId,message_id:messageId,parse_mode:'HTML',reply_markup:timeoutKeyboard});}catch(error){}
+return;}
+attempts++;
+const statusData=await checkPaymentStatus(orderId);
+let isPaid=false;
+if(statusData&&statusData.success){
+const status=(statusData.status||'').toString().toUpperCase();
+if(status.includes('SUCCESS')||status.includes('COMPLETED')||status.includes('BERHASIL')||status.includes('PAID')){
+isPaid=true;}}
+const progressPercent=Math.floor(attempts/maxAttempts*100);
+const progressBarFilled=Math.floor(progressPercent/10);
+const progressBarEmpty=10-progressBarFilled;
+const waktuMenit=Math.floor(attempts*5/60);
+const waktuDetik=(attempts*5)%60;
+try{
+const statusText=isPaid?'✅ BERHASIL':'⏳ MENUNGGU';
+const progressBar=isPaid?'[██████████]':`[${'█'.repeat(progressBarFilled)}${'░'.repeat(progressBarEmpty)}]`;
+const caption=`<blockquote>💰 PROSES PEMBAYARAN</blockquote>
+<blockquote>
+<b>Status :</b> ${statusText}
+<b>Produk :</b> ${escapeHTML(product.name)}
+<b>Harga :</b> Rp ${product.price.toLocaleString()}
+<b>Order ID :</b> <code>${orderId}</code>
+<b>Waktu :</b> ${waktuMenit}:${waktuDetik.toString().padStart(2,'0')} menit
+<b>Progress :</b> ${progressBar} ${progressPercent}%
+</blockquote>
+${isPaid?'✅ Pembayaran berhasil! Mengirim produk...':'⏳ Tunggu konfirmasi pembayaran...'}`;
+const keyboard={
+inline_keyboard:[
+[
+{text:'🔄 Refresh Status',callback_data:`refresh_${orderId}`},
+{text:'⛔ Batalkan',callback_data:`cancel_${orderId}`}
+],
+[
+{text:'⿻ ᴄʜᴀᴛ ᴀᴅᴍɪɴ',url:config.URLADMIN}
+]
+]};
+await bot.editMessageCaption(caption,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:keyboard});
+if(isPaid){
+clearInterval(pollingInterval);
+const transactions=loadTransactions();
+if(transactions[orderId]){
+transactions[orderId].status='completed';
+transactions[orderId].completedAt=new Date().toISOString();
+saveTransactions(transactions);}
+markProductAsSold(product.id);
+await sendProductToUser(chatId,product,orderId,messageId);
+setTimeout(()=>{
+bot.deleteMessage(chatId,messageId).catch(()=>{});},5000);}
+}catch(error){}
+},5000);}
+
+async function sendProductToUser(chatId,product,orderId,qrMessageId=null){
+try{
+const now=new Date();
+const formattedDate=now.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+const formattedTime=now.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+const productData=`<blockquote>✅ PEMBELIAN BERHASIL!</blockquote>
+<b>Detail Produk:</b>
+┏━━━━━━━━━━━━━━━━━━⬣
+┃ ✧ Nama: ${escapeHTML(product.name)}
+┃ ✧ Harga: Rp ${product.price.toLocaleString()}
+┃ ✧ Order ID: <code>${orderId}</code>
+┃ ✧ Waktu: ${formattedDate} ${formattedTime}
+┗━━━━━━━━━━━━━━━━━━⬣
+<b>📦 Data Produk:</b>
+
+${escapeHTML(product.data)}
+
+<b>⚠️ CATATAN:</b>
+• Jangan bagikan data ke siapapun!
+• Hubungi admin jika ada masalah
+Terima kasih telah membeli! 🎉`;
+await bot.sendMessage(chatId,productData,
+{parse_mode:'HTML',disable_web_page_preview:true});
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📢 NOTIFIKASI PEMBELIAN KE ADMIN
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+const adminNotif=`<blockquote>🛒 PEMBELIAN BARU!</blockquote>
+<b>Detail Pembelian:</b>
+┏━━━━━━━━━━━━━━━━━━⬣
+┃ ✧ Produk: ${escapeHTML(product.name)}
+┃ ✧ Harga: Rp ${product.price.toLocaleString()}
+┃ ✧ Order ID: <code>${orderId}</code>
+┃ ✧ Waktu: ${formattedDate} ${formattedTime}
+┃ ✧ Chat ID: <code>${chatId}</code>
+┗━━━━━━━━━━━━━━━━━━⬣
+<b>📊 Status:</b> ✅ BERHASIL
+<b>📅 Tanggal:</b> ${formattedDate}
+<b>🕒 Jam:</b> ${formattedTime}
+Pembelian telah sukses dan produk terkirim.`;
+bot.sendMessage(config.OWNER_ID,adminNotif,{
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'Chat User',url:`tg://user?id=${chatId}`},
+{text:escapeHTML(config.BOT_NAME),url:`https://t.me/${config.BOT_NAME}?start=buyer`}
+]]}})
+.catch(err=>console.error('Gagal kirim notif ke admin:',err));
+if(qrMessageId){
+setTimeout(()=>{
+bot.deleteMessage(chatId,qrMessageId).catch(()=>{});},3000);}
+}catch(error){
+console.error('Send product error:',error);
+await bot.sendMessage(chatId,
+`<blockquote>❌ GAGAL MENGIRIM PRODUK</blockquote>
+Hubungi admin dengan Order ID:
+<code>${orderId}</code>`,
+{parse_mode:'HTML'});}}
+
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 🎯 FUNGSI TAMBAHAN UNTUK CEK SERVER COUNT
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2249,6 +2511,7 @@ console.error('Uguu upload error:', error.message);
 return null;
 }
 }
+
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 📱 START COMMAND - BINGKAI BARU
@@ -2370,11 +2633,8 @@ const totalUsers=Object.keys(users).length;
 const waktuSumBarat=getWestSumatraTime();
 const tanggalLengkap=waktuSumBarat.date;
 const jamLengkap=waktuSumBarat.time;
-
-// BINGKAI BARU UNTUK START
 const caption=`<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
 안녕하세요 사용자, 환영합니다!
-
 <blockquote>┏━⬣ ✧「 WELCOME 」✧
 ┃ ✧ Status : ${escapeHTML(status)}
 ┃ ✧ Bot Name : ${escapeHTML(config.BOT_NAME)}
@@ -2383,11 +2643,9 @@ const caption=`<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquot
 ┃ ✧ Tanggal : ${escapeHTML(tanggalLengkap)}
 ┃ ✧ Jam : ${escapeHTML(jamLengkap)}
 ┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
-
 <blockquote>┏━⬣ ✧「 BOT UPTIME 」✧
 ┃ 📡 ${escapeHTML(vpsUptimeStr)}
 ┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
-
 Selamat datang di bot panel!`;
 const buttons={
 inline_keyboard:[
@@ -2485,9 +2743,6 @@ inline_keyboard:[
 else if(data==='tools_menu'){
 const toolsList=`<blockquote>
 ┏━⬣ ✧「 TOOLS MENU 」✧
-┃ 📥 Downloader Tools
-┃ 🎨 Converter Tools
-┗━━━━━━━━━━━━━━━━━━⬣
 <i>Pilih kategori tools yang ingin digunakan</i></blockquote>`;
 await bot.editMessageCaption(toolsList,{
 chat_id:chatId,
@@ -2496,11 +2751,15 @@ parse_mode:'HTML',
 reply_markup:{
 inline_keyboard:[
 [
-{text:'📥 Downloader',callback_data:'tools_downloader'},
-{text:'🎨 Converter',callback_data:'tools_converter'}
+{text:'📥 ᴅᴏᴡɴʟᴏᴀᴅᴇʀ',callback_data:'tools_downloader'},
+{text:'🎨 ᴄᴏɴᴠᴇʀᴛᴇʀ',callback_data:'tools_converter'}
 ],
 [
-{text:'<< Kembali',callback_data:'back'}
+{text:'⚙️ ʟᴀɪɴɴʏᴀ',callback_data:'tools_other'},
+{text:'🛒 ʙᴇʟɪ ᴘʀᴏᴅᴜᴋ',callback_data:'beli_produk'}
+],
+[
+{text:'<< ᴍᴇɴᴜ',callback_data:'back'}
 ]
 ]
 }});}
@@ -2524,11 +2783,12 @@ parse_mode:'HTML',
 reply_markup:{
 inline_keyboard:[
 [
-{text:'🎨 Converter',callback_data:'tools_converter'},
-{text:'⚙️ Lainnya',callback_data:'tools_other'}
+{text:'🎨 ᴄᴏɴᴠᴇʀᴛᴇʀ',callback_data:'tools_converter'},
+{text:'⚙️ ʟᴀɪɴɴʏᴀ',callback_data:'tools_other'}
 ],
 [
-{text:'🔙 Kembali',callback_data:'tools_menu'}
+{text:'🛒 ʙᴇʟɪ ᴘʀᴏᴅᴜᴋ',callback_data:'beli_produk'},
+{text:'🔙 ᴋᴇᴍʙᴀʟɪ',callback_data:'tools_menu'}
 ]
 ]
 }});}
@@ -2557,11 +2817,12 @@ parse_mode:'HTML',
 reply_markup:{
 inline_keyboard:[
 [
-{text:'📥 Downloader',callback_data:'tools_downloader'},
-{text:'⚙️ Lainnya',callback_data:'tools_other'}
+{text:'📥 ᴅᴏᴡɴʟᴏᴀᴅᴇʀ',callback_data:'tools_downloader'},
+{text:'⚙️ ʟᴀɪɴɴʏᴀ',callback_data:'tools_other'}
 ],
 [
-{text:'🔙 Kembali',callback_data:'tools_menu'}
+{text:'🛒 ʙᴇʟɪ ᴘʀᴏᴅᴜᴋ',callback_data:'beli_produk'},
+{text:'🔙 ᴋᴇᴍʙᴀʟɪ',callback_data:'tools_menu'}
 ]
 ]
 }});}
@@ -2574,8 +2835,10 @@ const otherList=`<blockquote>
 ┃ ✧ /listseller - List Seller
 ┃ ✧ /brat - Brain Test
 ┃ ✧ /iqc - IQ Test
+┃ ✧ /cekgempa - info gempa
 ┃ ✧ /tts [text] - Text to Speech
 ┃ ✧ /react [emoji] - Reaction
+┃ ✧ /newmail email sementara
 ┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
 await bot.editMessageCaption(otherList,{
 chat_id:chatId,
@@ -2584,14 +2847,175 @@ parse_mode:'HTML',
 reply_markup:{
 inline_keyboard:[
 [
-{text:'📥 Downloader',callback_data:'tools_downloader'},
-{text:'🎨 Converter',callback_data:'tools_converter'}
+{text:'📥 ᴅᴏᴡɴʟᴏᴀᴅᴇʀ',callback_data:'tools_downloader'},
+{text:'🎨 ᴄᴏɴᴠᴇʀᴛᴇʀ',callback_data:'tools_converter'}
 ],
 [
-{text:'🔙 Kembali',callback_data:'tools_menu'}
+{text:'🛒 ʙᴇʟɪ ᴘʀᴏᴅᴜᴋ',callback_data:'beli_produk'},
+{text:'🔙 ᴋᴇᴍʙᴀʟɪ',callback_data:'tools_menu'}
 ]
 ]
 }});}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🛒 BELI PRODUK MENU
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data==='beli_produk'){
+const products=getAvailableProducts();
+if(products.length===0){
+const emptyText=`<blockquote>
+┏━⬣ ✧「 BELI PRODUK 」✧
+┃ ✧ 📭 PRODUK BELUM TERSEDIA
+┃ ✧ Admin belum menambahkan produk
+┃ ✧ Coba lagi nanti yaa~ 
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.editMessageCaption(emptyText,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'<< Kembali',callback_data:'tools_menu'}
+]
+]}});
+return;}
+const productsText=`<blockquote>
+┏━⬣ ✧「 BELI PRODUK 」✧
+┃ ✧ Pilih produk dari tombol di bawah:
+┃ ✧ Klik untuk melihat detail produk
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+
+const keyboardRows=[];
+products.forEach((prod,index)=>{
+if(index%2===0){keyboardRows.push([]);}
+keyboardRows[Math.floor(index/2)].push({
+text:`${index+1} ${prod.name.substring(0,15)}`,
+callback_data:`view_prod_${prod.id}`});});
+keyboardRows.push([
+{text:'<< Kembali',callback_data:'tools_menu'}
+]);
+await bot.editMessageCaption(productsText,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{inline_keyboard:keyboardRows}});}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 👁️ VIEW PRODUK DETAIL
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data.startsWith('view_prod_')){
+const productId=data.replace('view_prod_','');
+const products=getAvailableProducts();
+const product=products.find(p=>p.id===productId);
+if(!product){
+await bot.answerCallbackQuery(callbackQueryId,{text:'⚠️ Produk tidak ditemukan!'});
+return;}
+const createdAt=new Date(product.createdAt);
+const formattedDate=createdAt.toLocaleDateString('id-ID',{day:'2-digit',month:'2-digit',year:'numeric'});
+const formattedTime=createdAt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+const productText=`<blockquote>
+┏━⬣ ✧「 DETAIL PRODUK 」✧
+┃ ✧ 📦 ${escapeHTML(product.name)}
+┃ ✧ 💰 Rp ${product.price.toLocaleString()}
+┃ ✧ 🆔 ${product.id}
+┃ ✧ 📅 ${formattedDate} - 🕒 ${formattedTime}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
+
+<b>📝 DESKRIPSI:</b>
+${product.description||'Tidak ada deskripsi tersedia 🙏🙏'}
+
+<b>📋 INFORMASI:</b>
+• Stok: ${product.stock||'Tersedia'}
+• Kategori: ${product.category||'Umum'}
+
+<b>🛒 INSTRUKSI:</b>
+1: Klik tombol "Beli Produk" di bawah
+2: Ikuti proses pembayaran
+3: Produk akan dikirim otomatis`;
+
+await bot.editMessageCaption(productText,{
+chat_id:chatId,
+message_id:messageId,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'💰 Beli Produk',callback_data:`buy_prod_${product.id}`}
+],
+[
+{text:'📋 Daftar Produk',callback_data:'beli_produk'},
+{text:'<< Kembali',callback_data:'tools_menu'}
+]
+]}});}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 💰 PEMBAYARAN PRODUK
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+else if(data.startsWith('buy_prod_')){
+const productId=data.replace('buy_prod_','');
+const product=getProduct(productId);
+if(!product){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Produk tidak ditemukan!',show_alert:true});
+return;}
+if(product.status!=='available'){
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Produk sudah habis!',show_alert:true});
+return;}
+const orderId='PROD_'+Date.now()+'_'+Math.random().toString(36).substr(2,5).toUpperCase();
+const transactions=loadTransactions();
+transactions[orderId]={
+type:'product',
+productId:productId,
+productName:product.name,
+userId:userId,
+username:username,
+price:product.price,
+status:'pending',
+createdAt:new Date().toISOString()};
+saveTransactions(transactions);
+try{
+const qrData=await createQRISPayment(orderId,product.price);
+if(!qrData||!qrData.qris_string){
+throw new Error('Gagal membuat QRIS payment');}
+const qrBuffer=await generateQRCode(qrData.qris_string);
+if(!qrBuffer){
+throw new Error('Gagal membuat QR Code');}
+const caption=`<blockquote>( 👤 ) - 情報, ${escapeHTML(username)}</blockquote>
+Halo, silakan lakukan pembayaran untuk melanjutkan!
+<blockquote><b>Status :</b> ⏳ MENUNGGU PEMBAYARAN
+<b>Produk :</b> ${escapeHTML(product.name)}
+<b>Harga :</b> Rp ${product.price.toLocaleString()}
+<b>Order ID :</b> <code>${orderId}</code>
+<b>Waktu :</b> 0:00 menit
+<b>Progress :</b> [░░░░░░░░░░] 0%</blockquote>
+Silakan ikuti instruksi pembayaran berikut:
+<blockquote><b>Instruksi :</b>
+1. Scan QR di atas
+2. Bayar sesuai harga
+3. Sistem otomatis mendeteksi pembayaran
+⏳ Batas waktu: 10 menit</blockquote>`;
+const sentMessage=await bot.sendPhoto(chatId,qrBuffer,{
+caption:caption,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[
+[
+{text:'🔄 Refresh Status',callback_data:`refresh_${orderId}`},
+{text:'⛔ Batalkan',callback_data:`cancel_${orderId}`}
+],
+[
+{text:'⿻ ᴄʜᴀᴛ ᴀᴅᴍɪɴ',url:config.URLADMIN}
+]
+]}});
+startProductPaymentPolling(orderId,chatId,userId,product,sentMessage.message_id);
+await bot.answerCallbackQuery(callbackQuery.id,{text:'✅ QR Code ditampilkan!',show_alert:false});
+}catch(error){
+console.error('Product payment error:',error);
+await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Gagal membuat pembayaran!',show_alert:true});}}
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 👑 OWNER MENU
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 else if(data==='owner_menu'||data==='ownermenu'){
 if(!isAdmin(userId)){
 await bot.answerCallbackQuery(callbackQuery.id,{text:'❌ Hanya admin yang bisa!',show_alert:true});
@@ -2607,6 +3031,10 @@ const ownerList=`<blockquote>
 ┃ ✧ /addseller [id]
 ┃ ✧ /delseller [id]
 ┃ ✧ /broadcast [pesan]
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 PRODUCTS SYSTEM 」✧
+┃ ✧ /addproduk
+┃ ✧ /delproduk
 ┣━━━━━━━━━━━━━━━━━━⬣
 ┏━⬣ ✧「 AI KASIR SYSTEM 」✧
 ┃ ✧ /ai on & off
@@ -2624,9 +3052,11 @@ message_id:messageId,
 parse_mode:'HTML',
 reply_markup:{
 inline_keyboard:[
-[{text:'<<',callback_data:'back'}]
+[
+{text:'<<',callback_data:'back'}
 ]
-}});}
+]}});}
+
 else if(data==='view_config'){
 const configData=getServerConfig();
 const otakai=loadOtakai();
@@ -3217,8 +3647,197 @@ setTimeout(()=>{
 bot.deleteMessage(chatId,messageId).catch(()=>{});},5000);
 await bot.answerCallbackQuery(callbackQuery.id,{ 
 text:'✅ Seller upgrade dibatalkan! Foto QR akan dihapus otomatis.', 
-show_alert:false});}
+show_alert:false}
+);
+}
 });
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 🌍 CEKGEMPA COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/cekgempa$/,async(msg)=>{
+const chatId=msg.chat.id;
+const userId=msg.from.id.toString();
+const username=msg.from.username?`@${msg.from.username}`:msg.from.first_name||'User';
+const chatType=msg.chat.type;
+const groupName=chatType==='group'||chatType==='supergroup'?msg.chat.title:null;
+const messageText='/cekgempa';
+try{
+const response=await axios.get('https://zelapioffciall.koyeb.app/info/cekgempa');
+const data=response.data;
+if(!data.status||!data.result){throw new Error('Format data API tidak valid');}
+const gempa=data.result;
+const gempaCaption=`<blockquote>
+┏━⬣ ✧「 INFO GEMPA TERKINI 」✧
+┃ ✧ 📍 Lokasi: ${escapeHTML(gempa.lokasi)}
+┃ ✧ ⏰ Waktu: ${escapeHTML(gempa.waktu)}
+┃ ✧ 📊 Magnitudo: ${escapeHTML(gempa.magnitude)}
+┃ ✧ ⬇️ Kedalaman: ${escapeHTML(gempa.kedalaman)}
+┣━━━━━━━━━━━━━━━━━━⬣
+┏━⬣ ✧「 DETAIL GEMPA 」✧
+┃ ✧ 🧭 Koordinat: <code>${escapeHTML(gempa.koordinat)}</code>
+┃ ✧ ⚠️ Potensi: ${escapeHTML(gempa.potensi)}
+┃ ✧ 👤 Dirasakan: ${escapeHTML(gempa.dirasakan)}
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>`;
+await bot.sendPhoto(chatId,gempa.peta,{
+caption:gempaCaption,
+parse_mode:'HTML',
+reply_markup:{
+inline_keyboard:[[{text:'🗺️ Lihat Peta',url:gempa.peta}]]}});}
+catch(error){
+await bot.sendMessage(chatId,
+`<blockquote>❌ GAGAL MENGAMBIL DATA</blockquote>
+<b>Error:</b> ${escapeHTML(error.message)}`,
+{parse_mode:'HTML'});
+}
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📝 DELPRODUK
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/delproduk(?:\s+(.+))?$/i,async(msg,match)=>{
+const chatId=msg.chat.id;
+const userId=msg.from.id.toString();
+const username=msg.from.username?`@${msg.from.username}`:msg.from.first_name||'User';
+const chatType=msg.chat.type;
+const groupName=chatType==='group'||chatType==='supergroup'?msg.chat.title:null;
+const messageText='/delproduk';
+if(!isAdmin(userId)){
+return bot.sendMessage(chatId,
+`<blockquote>🚫 Akses Ditolak</blockquote>
+Hanya admin yang bisa menghapus produk!`,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});}
+const productId=match[1];
+if(!productId){
+const products=getAvailableProducts();
+if(products.length===0){
+return bot.sendMessage(chatId,
+`<blockquote>📦 DAFTAR PRODUK</blockquote>
+Tidak ada produk yang tersedia.`,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});}
+let listText=`<blockquote>
+┏━⬣ ✧「 HAPUS PRODUK 」✧
+┃ ✧ Total: ${products.length} produk
+┗━━━━━━━━━━━━━━━━━━⬣</blockquote>\n\n`;
+products.forEach((prod,index)=>{
+listText+=`${index+1}. <b>${escapeHTML(prod.name)}</b>\n`;
+listText+=`Harga: Rp ${prod.price.toLocaleString()}\n`;
+listText+=`ID: <code>${prod.id}</code>\n\n`;});
+listText+=`<b>Gunakan:</b> <code>/delproduk [ID_PRODUK]</code>`;
+return bot.sendMessage(chatId,listText,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});}
+try{
+const success=deleteProduct(productId);
+if(success){
+await bot.sendMessage(chatId,
+`<blockquote>✅ PRODUK DIHAPUS</blockquote>
+Produk dengan ID <code>${productId}</code> berhasil dihapus.`,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});
+}else{
+throw new Error('Produk tidak ditemukan!');}
+}catch(error){
+await bot.sendMessage(chatId,
+`<blockquote>❌ GAGAL MENGHAPUS PRODUK</blockquote>
+<b>Error:</b> ${escapeHTML(error.message)}
+<b>Format:</b> <code>/delproduk [ID_PRODUK]</code>`,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});}});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📝 ADD PRODUK COMMAND
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/addproduk$/i,async(msg)=>{
+const chatId=msg.chat.id;
+const userId=msg.from.id.toString();
+const username=msg.from.username?`@${msg.from.username}`:msg.from.first_name||'User';
+const chatType=msg.chat.type;
+const groupName=chatType==='group'||chatType==='supergroup'?msg.chat.title:null;
+const messageText='/addproduk';
+if(!isAdmin(userId)){
+return bot.sendMessage(chatId,
+`<blockquote>🚫 Akses Ditolak</blockquote>
+Hanya admin yang bisa menambahkan produk!`,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});}
+addProductState[userId]={step:'nama',data:{}};
+const instructions=`<blockquote>📝 TAMBAH PRODUK BARU</blockquote>
+<b>Ikuti langkah-langkah berikut:</b>
+<b>Langkah 1: Nama Produk</b>
+Contoh: <code>YouTube Premium Family</code>
+<blockquote>Silakan ketik nama produk:</blockquote>`;
+await bot.sendMessage(chatId,instructions,
+{parse_mode:'HTML',reply_to_message_id:msg.message_id});});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📝 HANDLER PROSES BERTAHAP (TANPA KONFIRMASI)
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.on('message',async(msg)=>{
+if(!msg.text||msg.text.startsWith('/'))return;
+const userId=msg.from.id.toString();
+const chatId=msg.chat.id;
+const username=msg.from.username?`@${msg.from.username}`:msg.from.first_name||'User';
+const chatType=msg.chat.type;
+const groupName=chatType==='group'||chatType==='supergroup'?msg.chat.title:null;
+const text=msg.text.trim();
+if(!addProductState[userId])return;
+const state=addProductState[userId];
+try{
+switch(state.step){
+case'nama':
+if(text.length<3){throw new Error('Nama produk minimal 3 karakter!');}
+state.data.nama=text;
+state.step='harga';
+await bot.sendMessage(chatId,
+`<blockquote>📝 TAMBAH PRODUK BARU</blockquote>
+<b>Langkah 2: Harga Produk</b>
+Contoh: <code>65000</code>
+<blockquote>Silakan ketik harga (angka tanpa titik):</blockquote>`,
+{parse_mode:'HTML'});break;
+case'harga':
+const price=parseInt(text.replace(/[^\d]/g,''));
+if(isNaN(price)||price<1000){throw new Error('Harga harus angka minimal Rp 1.000!');}
+state.data.harga=price;
+state.step='data';
+await bot.sendMessage(chatId,
+`<blockquote>📝 TAMBAH PRODUK BARU</blockquote>
+<b>Langkah 3: Data Produk</b>
+Contoh akun: <code>email:user@gmail.com|password:pass123</code>
+Contoh link: <code>url downloader file</code>
+<blockquote>Silakan ketik data produk:</blockquote>`,
+{parse_mode:'HTML'});break;
+case'data':
+if(text.length<5){throw new Error('Data produk minimal 5 karakter!');}
+state.data.data=text;
+state.step='deskripsi';
+await bot.sendMessage(chatId,
+`<blockquote>📝 TAMBAH PRODUK BARU</blockquote>
+<b>Langkah 4: Deskripsi Produk (Opsional)</b>
+Contoh: <code>YouTube Premium Family 1 tahun, 6 member</code>
+<blockquote>Silakan ketik deskripsi atau ketik <code>skip</code> untuk skip:</blockquote>`,
+{parse_mode:'HTML'});break;
+case'deskripsi':
+const description=text.toLowerCase()==='skip'?'':text;
+state.data.deskripsi=description;
+const productId=addProduct(state.data.nama,state.data.harga,state.data.data,state.data.deskripsi);
+if(!productId||productId.startsWith('PROD_')===false){throw new Error('Gagal membuat ID produk!');}
+const successMessage=`<blockquote>✅ PRODUK DITAMBAHKAN</blockquote>
+<b>Detail Produk:</b>
+┏━━━━━━━━━━━━━━━━━━⬣
+┃ ✧ ID: <code>${productId}</code>
+┃ ✧ Nama: ${escapeHTML(state.data.nama)}
+┃ ✧ Harga: Rp ${state.data.harga.toLocaleString()}
+┃ ✧ Data: ${escapeHTML(state.data.data.substring(0,50))}...
+┃ ✧ Deskripsi: ${state.data.deskripsi?escapeHTML(state.data.deskripsi.substring(0,100))+'...':'Tidak ada'}
+┃ ✧ Status: ✅ TERSEDIA
+┗━━━━━━━━━━━━━━━━━━⬣
+Produk siap dijual!`;
+await bot.sendMessage(chatId,successMessage,{parse_mode:'HTML'});
+delete addProductState[userId];break;}
+}catch(error){
+await bot.sendMessage(chatId,
+`<blockquote>❌ ERROR</blockquote>
+<b>Pesan:</b> ${escapeHTML(error.message)}
+<blockquote>Silakan coba lagi:</blockquote>`,
+{parse_mode:'HTML'});
+delete addProductState[userId];}});
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 📼 HDVID COMMAND - ENHANCE VIDEO QUALITY
@@ -3513,74 +4132,6 @@ errorMessage = `<blockquote>❌ Gagal membuat ZIP</blockquote>`;
 errorMessage = `<blockquote>🌐 Domain error</blockquote>`;
 } else {
 errorMessage = `<blockquote>❌ Error sistem</blockquote>`;
-}
-try {
-await bot.deleteMessage(chatId, processingMsg?.message_id || 0);
-} catch (e) {}
-await bot.sendMessage(chatId, errorMessage, {
-parse_mode: "HTML",
-reply_to_message_id: msg.message_id
-});
-}
-});
-
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// 🌐 WEBSITE SCREENSHOT COMMAND - SUPER SIMPLE
-//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-bot.onText(/^\/ssweb(?:\s+(.+))?$/, async (msg, match) => {
-const chatId = msg.chat.id;
-const userId = msg.from.id.toString();
-const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name;
-const chatType = msg.chat.type;
-const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
-const messageText = `/ssweb ${match[1] || ''}`.trim();
-logUserInteraction(userId, username, chatType, messageText, groupName);
-const url = match[1];
-if (!url) {
-return bot.sendMessage(chatId,
-"<blockquote>❌ Masukkan URL website!</blockquote>\nContoh: <code>/ssweb https://google.com</code>",
-{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
-);
-}
-if (!url.startsWith('http://') && !url.startsWith('https://')) {
-return bot.sendMessage(chatId,
-"<blockquote>❌ URL harus dimulai dengan http:// atau https://</blockquote>",
-{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
-);
-}
-try {
-const processingMsg = await bot.sendMessage(chatId,
-"<blockquote>🌐 Mengambil screenshot...</blockquote>",
-{ parse_mode: "HTML", reply_to_message_id: msg.message_id }
-);
-const encodedUrl = encodeURIComponent(url);
-const apiUrl = `https://api.resellergaming.my.id/tools/ssweb?url=${encodedUrl}`;
-const response = await axios.get(apiUrl, { timeout: 30000 });
-const data = response.data;
-if (!data.status || !data.result) {
-throw new Error('API tidak mengembalikan screenshot');
-}
-await bot.sendPhoto(chatId, data.result, {
-caption: `<blockquote>┏━⬣ ✧「 SCREENSHOT WEBSITE 」✧
-┃ ✧ URL: <code>${escapeHTML(url)}</code>
-┗━━━━━━━━━━━━━━━━━━⬣</blockquote>
-✅ Screenshot berhasil diambil!`,
-parse_mode: "HTML",
-reply_to_message_id: msg.message_id
-});
-await bot.deleteMessage(chatId, processingMsg.message_id);
-} catch (error) {
-console.error('SSWeb error:', error.message);
-logError('SSWEB_ERROR', `URL: ${url}, Error: ${error.message}`, userId, username);
-let errorMessage = '';
-if (error.code === 'ECONNABORTED' || error.message.includes('timeout')) {
-errorMessage = "<blockquote>⏱️ Timeout - Server terlalu lama merespon</blockquote>\n💡 Coba beberapa saat lagi";
-} else if (error.response?.status === 404 || error.response?.status === 500) {
-errorMessage = "<blockquote>❌ Gagal mengambil screenshot</blockquote>\n💡 Coba URL lain atau coba nanti";
-} else if (error.message.includes('API tidak mengembalikan')) {
-errorMessage = "<blockquote>❌ API tidak merespon dengan benar</blockquote>";
-} else {
-errorMessage = "<blockquote>❌ Error sistem</blockquote>";
 }
 try {
 await bot.deleteMessage(chatId, processingMsg?.message_id || 0);

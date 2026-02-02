@@ -1,6 +1,6 @@
 {
   "name": "novabot",
-  "version": "1.0.0",
+  "version": "1.2",
   "description": "Bot Telegram Panel dengan Pembayaran QRIS Otomatis",
   "main": "Novabot.js",
   "scripts": {
