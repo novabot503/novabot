@@ -1,18 +1,13 @@
 module.exports = {
-    TELEGRAM_TOKEN: "85515141:AAFNoP6xrgO_AogDt7VetqYMeRVpPpMj_8E",
-    OWNER_ID: "75873225",
-
-    VERSI: "1.3",
-    BOT_NAME: "Novabot",
-    DEVCELOPER: "botzmarket",
-    DOMAIN: "https://novabot.ranggarket.my.id",
-    PLTA: "ptla_8Iojq0bq5Gli4WTZrxhSKBRfK5iLoygLfWVzrWwj9",
-    EGG: "15",
-    LOX: "1",
-    URLADMIN: "https://t.me/botzmarket95",
-    URLVIDEO: "https://files.catbox.moe/9vdp6x.mp4",
-    PP: "https://files.catbox.moe/0b5579.jpg",
-    PAKASIR_PROJECT: "botzmarket",
-    PAKASIR_API_KEY: "sHli68x2vfaee3uChutmmbCSz8DaCh",
-    VERCEL: "gY4yPeYsP959NtOJrcTNYOiI"
+    TELEGRAM_TOKEN: "8332999387:AAEoKIG7UlB621b6QG7djNeIK69BJSXq45I",
+    OWNER_ID: "7587303225",
+    PORT: 8080,
+    HOST: 'localhost',
+    DEVELOPER: '@Novabot403',
+    VERSI_WEB: '1.0',
+    URL: 'https://uplod.vercel.app',
+    GITHUB_TOKEN: "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",
+    GITHUB_REPO: "novabot503/uplod",
+    GITHUB_BRANCH: "main",
+    GITHUB_PATH: "file"
 };
